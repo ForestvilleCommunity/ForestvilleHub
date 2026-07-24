@@ -1,0 +1,138 @@
+{
+  "name": "Player",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Player Name"
+    },
+    "member_id": {
+      "type": "string",
+      "title": "Linked Member ID"
+    },
+    "team_id": {
+      "type": "string",
+      "title": "Team"
+    },
+    "jersey_number": {
+      "type": "number",
+      "title": "Jersey Number"
+    },
+    "position": {
+      "type": "string",
+      "title": "Position",
+      "enum": [
+        "Point Guard",
+        "Shooting Guard",
+        "Small Forward",
+        "Power Forward",
+        "Center",
+        "Guard",
+        "Forward",
+        "Utility"
+      ]
+    },
+    "date_of_birth": {
+      "type": "string",
+      "title": "Date of Birth",
+      "format": "date"
+    },
+    "injury_status": {
+      "type": "string",
+      "title": "Injury Status",
+      "enum": [
+        "Healthy",
+        "Injured",
+        "Doubtful",
+        "Suspended"
+      ],
+      "default": "Healthy"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "Active",
+        "Inactive"
+      ],
+      "default": "Active"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    },
+    "owner_user_email": {
+      "type": "string",
+      "title": "Owner Email"
+    },
+    "visibility": {
+      "type": "string",
+      "title": "Visibility",
+      "enum": [
+        "Private",
+        "Club"
+      ],
+      "default": "Private"
+    },
+    "is_demo": {
+      "type": "boolean",
+      "title": "Demo Content",
+      "default": false
+    }
+  },
+  "required": [
+    "name",
+    "team_id"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "data.visibility": "Club"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

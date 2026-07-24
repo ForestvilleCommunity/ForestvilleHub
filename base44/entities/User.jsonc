@@ -1,0 +1,25 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "title": "Role",
+      "enum": [
+        "admin",
+        "user"
+      ],
+      "default": "user"
+    },
+    "account_status": {
+      "type": "string",
+      "title": "Account Status",
+      "enum": [
+        "Active",
+        "Suspended",
+        "Pending Deletion"
+      ],
+      "default": "Active"
+    }
+  }
+}

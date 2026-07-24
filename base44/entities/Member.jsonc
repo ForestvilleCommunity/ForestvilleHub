@@ -1,0 +1,185 @@
+{
+  "name": "Member",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Full Name"
+    },
+    "date_of_birth": {
+      "type": "string",
+      "title": "Date of Birth",
+      "format": "date"
+    },
+    "gender": {
+      "type": "string",
+      "title": "Gender",
+      "enum": [
+        "Male",
+        "Female",
+        "Non-binary",
+        "Prefer not to say"
+      ]
+    },
+    "email": {
+      "type": "string",
+      "title": "Email"
+    },
+    "phone": {
+      "type": "string",
+      "title": "Phone"
+    },
+    "address": {
+      "type": "string",
+      "title": "Address"
+    },
+    "team_id": {
+      "type": "string",
+      "title": "Team"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "Active",
+        "Archived"
+      ],
+      "default": "Active"
+    },
+    "visibility": {
+      "type": "string",
+      "title": "Visibility",
+      "enum": [
+        "Club",
+        "Private"
+      ],
+      "default": "Club"
+    },
+    "owner_user_email": {
+      "type": "string",
+      "title": "Owner Email"
+    },
+    "parent_name": {
+      "type": "string",
+      "title": "Parent / Guardian Name"
+    },
+    "parent_phone": {
+      "type": "string",
+      "title": "Parent Phone"
+    },
+    "parent_email": {
+      "type": "string",
+      "title": "Parent Email"
+    },
+    "secondary_contact_name": {
+      "type": "string",
+      "title": "Secondary Contact Name"
+    },
+    "secondary_contact_phone": {
+      "type": "string",
+      "title": "Secondary Contact Phone"
+    },
+    "school": {
+      "type": "string",
+      "title": "School Attending"
+    },
+    "previous_club": {
+      "type": "string",
+      "title": "Previous Club"
+    },
+    "previous_club_year": {
+      "type": "string",
+      "title": "Year Last Played"
+    },
+    "volunteer_interest": {
+      "type": "boolean",
+      "title": "Volunteer Coach / Team Manager Interest",
+      "default": false
+    },
+    "sponsorship_interest": {
+      "type": "boolean",
+      "title": "Sponsorship Interest",
+      "default": false
+    },
+    "medical_conditions": {
+      "type": "string",
+      "title": "Medical Conditions"
+    },
+    "medication": {
+      "type": "string",
+      "title": "Medication / Special Instructions"
+    },
+    "other_conditions": {
+      "type": "string",
+      "title": "Other Conditions"
+    },
+    "additional_info": {
+      "type": "string",
+      "title": "Additional Information"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    },
+    "uniform_number": {
+      "type": "integer",
+      "title": "Uniform Number",
+      "minimum": 0,
+      "maximum": 99
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "data.visibility": "Club"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "name": "ClubChallenge",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "Challenge Title"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "item_type": {
+      "type": "string",
+      "title": "Type",
+      "enum": [
+        "Challenge",
+        "Event"
+      ],
+      "default": "Challenge"
+    },
+    "challenge_type": {
+      "type": "string",
+      "title": "Category",
+      "enum": [
+        "Weekly Drill Focus",
+        "Skill Challenge",
+        "Team Concept",
+        "Shooting Challenge",
+        "Defensive Challenge",
+        "Coach Education",
+        "Custom"
+      ]
+    },
+    "assigned_drill_ids": {
+      "type": "string",
+      "title": "Assigned Drill IDs (JSON)"
+    },
+    "assigned_drill_name": {
+      "type": "string",
+      "title": "Assigned Drill / Play Name"
+    },
+    "goal_type": {
+      "type": "string",
+      "title": "Goal Type",
+      "enum": [
+        "Makes",
+        "Reps",
+        "Minutes",
+        "Rounds",
+        "Attempts",
+        "Custom"
+      ]
+    },
+    "target_value": {
+      "type": "string",
+      "title": "Target Value (e.g. 20)"
+    },
+    "target_notes": {
+      "type": "string",
+      "title": "Target Notes (coaching cue)"
+    },
+    "challenge_duration_minutes": {
+      "type": "number",
+      "title": "Duration (minutes)"
+    },
+    "target": {
+      "type": "string",
+      "title": "Target (legacy)"
+    },
+    "focus_category": {
+      "type": "string",
+      "title": "Focus Category"
+    },
+    "start_date": {
+      "type": "string",
+      "title": "Start Date",
+      "format": "date"
+    },
+    "end_date": {
+      "type": "string",
+      "title": "Due / End Date",
+      "format": "date"
+    },
+    "target_age_groups": {
+      "type": "string",
+      "title": "Target Age Groups"
+    },
+    "target_teams": {
+      "type": "string",
+      "title": "Target Teams (JSON)"
+    },
+    "assigned_squad_ids": {
+      "type": "string",
+      "title": "Assigned Squad IDs (JSON)"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes for Coaches"
+    },
+    "created_by": {
+      "type": "string",
+      "title": "Created By (email)"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "Draft",
+        "Active",
+        "Completed",
+        "Archived"
+      ],
+      "default": "Draft"
+    },
+    "is_template": {
+      "type": "boolean",
+      "title": "Is Template",
+      "default": false
+    }
+  },
+  "required": [
+    "title"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

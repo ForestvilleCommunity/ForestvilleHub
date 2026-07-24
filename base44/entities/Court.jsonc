@@ -1,0 +1,36 @@
+{
+  "name": "Court",
+  "type": "object",
+  "properties": {
+    "venue_id": {
+      "type": "string",
+      "title": "Venue ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Court Name"
+    }
+  },
+  "required": [
+    "venue_id",
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

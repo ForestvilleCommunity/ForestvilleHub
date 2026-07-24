@@ -1,0 +1,69 @@
+{
+  "name": "Squad",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Squad Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "age_group": {
+      "type": "string",
+      "title": "Age Group"
+    },
+    "gender": {
+      "type": "string",
+      "title": "Gender / Category"
+    },
+    "season": {
+      "type": "string",
+      "title": "Season"
+    },
+    "team_ids": {
+      "type": "string",
+      "title": "Team IDs (JSON)"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "Active",
+        "Archived"
+      ],
+      "default": "Active"
+    },
+    "visibility": {
+      "type": "string",
+      "title": "Visibility",
+      "default": "Club"
+    },
+    "owner_user_email": {
+      "type": "string",
+      "title": "Owner Email"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

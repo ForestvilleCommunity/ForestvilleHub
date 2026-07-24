@@ -1,0 +1,127 @@
+{
+  "name": "SessionDrill",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "title": "Session"
+    },
+    "drill_id": {
+      "type": "string",
+      "title": "Drill"
+    },
+    "drill_name": {
+      "type": "string",
+      "title": "Drill Name"
+    },
+    "challenge_id": {
+      "type": "string",
+      "title": "Challenge ID"
+    },
+    "block_id": {
+      "type": "string",
+      "title": "Block ID"
+    },
+    "player_id": {
+      "type": "string",
+      "title": "Player ID"
+    },
+    "order": {
+      "type": "number",
+      "title": "Order"
+    },
+    "duration": {
+      "type": "number",
+      "title": "Duration (mins)"
+    },
+    "focus_category": {
+      "type": "string",
+      "title": "Focus Category",
+      "enum": [
+        "Ball Handling",
+        "Finishing",
+        "Shooting",
+        "Passing",
+        "Decision Making",
+        "Defense",
+        "Footwork",
+        "Transition",
+        "Confidence",
+        "Basketball IQ",
+        "Rebounding",
+        "Athletic Movement"
+      ]
+    },
+    "goal_type": {
+      "type": "string",
+      "title": "Goal Type"
+    },
+    "goal_target": {
+      "type": "string",
+      "title": "Goal Target"
+    },
+    "goal_result": {
+      "type": "string",
+      "title": "Goal Result"
+    },
+    "custom_goal_name": {
+      "type": "string",
+      "title": "Custom Goal Name"
+    },
+    "custom_goal_target": {
+      "type": "string",
+      "title": "Custom Goal Target"
+    },
+    "custom_goal_result": {
+      "type": "string",
+      "title": "Custom Goal Result"
+    },
+    "session_notes": {
+      "type": "string",
+      "title": "Notes"
+    },
+    "coach_rating": {
+      "type": "number",
+      "title": "Coach Rating (1-5)",
+      "enum": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "Pending",
+        "Completed",
+        "Skipped"
+      ],
+      "default": "Pending"
+    },
+    "is_demo": {
+      "type": "boolean",
+      "title": "Demo Content",
+      "default": false
+    }
+  },
+  "required": [
+    "session_id"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

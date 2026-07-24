@@ -1,0 +1,129 @@
+{
+  "name": "Game",
+  "type": "object",
+  "properties": {
+    "game_date": {
+      "type": "string",
+      "title": "Game Date",
+      "format": "date"
+    },
+    "team_id": {
+      "type": "string",
+      "title": "Team"
+    },
+    "opponent": {
+      "type": "string",
+      "title": "Opponent"
+    },
+    "location": {
+      "type": "string",
+      "title": "Location"
+    },
+    "result": {
+      "type": "string",
+      "title": "Result",
+      "enum": [
+        "Win",
+        "Loss",
+        "Draw",
+        "TBD"
+      ],
+      "default": "TBD"
+    },
+    "our_score": {
+      "type": "number",
+      "title": "Our Score"
+    },
+    "opponent_score": {
+      "type": "number",
+      "title": "Opponent Score"
+    },
+    "season": {
+      "type": "string",
+      "title": "Season"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    },
+    "player_availability": {
+      "type": "string",
+      "title": "Player Availability (JSON)"
+    },
+    "starting_five": {
+      "type": "string",
+      "title": "Starting Five (JSON)"
+    },
+    "matchups": {
+      "type": "string",
+      "title": "Matchups (JSON)"
+    },
+    "substitution_plan": {
+      "type": "string",
+      "title": "Substitution Plan"
+    },
+    "special_plays": {
+      "type": "string",
+      "title": "Special Plays (JSON)"
+    },
+    "reminders": {
+      "type": "string",
+      "title": "Reminders"
+    },
+    "owner_user_email": {
+      "type": "string",
+      "title": "Owner Email"
+    },
+    "team_stats": {
+      "type": "string",
+      "title": "Team Stats (JSON)"
+    },
+    "game_timer_seconds": {
+      "type": "number",
+      "title": "Game Timer (seconds)"
+    },
+    "is_demo": {
+      "type": "boolean",
+      "title": "Demo Content",
+      "default": false
+    }
+  },
+  "required": [
+    "game_date",
+    "team_id",
+    "opponent"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
+    }
+  }
+}

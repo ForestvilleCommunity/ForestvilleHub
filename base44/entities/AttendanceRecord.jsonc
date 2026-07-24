@@ -1,0 +1,91 @@
+{
+  "name": "AttendanceRecord",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "title": "Session"
+    },
+    "team_id": {
+      "type": "string",
+      "title": "Team"
+    },
+    "player_id": {
+      "type": "string",
+      "title": "Player"
+    },
+    "member_id": {
+      "type": "string",
+      "title": "Member"
+    },
+    "coach_user_email": {
+      "type": "string",
+      "title": "Coach Email"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "Present",
+        "Absent",
+        "Late",
+        "Injured",
+        "Excused"
+      ],
+      "default": "Present"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    },
+    "date": {
+      "type": "string",
+      "title": "Date",
+      "format": "date"
+    }
+  },
+  "required": [
+    "session_id",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.coach_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.coach_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.coach_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
+    }
+  }
+}

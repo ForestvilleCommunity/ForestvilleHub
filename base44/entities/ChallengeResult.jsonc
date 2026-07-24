@@ -1,0 +1,86 @@
+{
+  "name": "ChallengeResult",
+  "type": "object",
+  "properties": {
+    "challenge_id": {
+      "type": "string",
+      "title": "Challenge"
+    },
+    "session_id": {
+      "type": "string",
+      "title": "Session"
+    },
+    "session_drill_id": {
+      "type": "string",
+      "title": "Session Drill"
+    },
+    "drill_id": {
+      "type": "string",
+      "title": "Drill"
+    },
+    "team_id": {
+      "type": "string",
+      "title": "Team"
+    },
+    "coach_email": {
+      "type": "string",
+      "title": "Coach Email"
+    },
+    "player_ids": {
+      "type": "string",
+      "title": "Player IDs (JSON)"
+    },
+    "target_value": {
+      "type": "string",
+      "title": "Target Value"
+    },
+    "result_value": {
+      "type": "string",
+      "title": "Result Value"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    },
+    "completed_at": {
+      "type": "string",
+      "title": "Completed At"
+    }
+  },
+  "required": [
+    "challenge_id"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "$or": [
+        {
+          "data.coach_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.coach_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

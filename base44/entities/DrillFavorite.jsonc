@@ -1,0 +1,32 @@
+{
+  "name": "DrillFavorite",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "title": "User Email"
+    },
+    "drill_id": {
+      "type": "string",
+      "title": "Drill ID"
+    }
+  },
+  "required": [
+    "user_email",
+    "drill_id"
+  ],
+  "rls": {
+    "create": {
+      "data.user_email": "{{user.email}}"
+    },
+    "read": {
+      "data.user_email": "{{user.email}}"
+    },
+    "update": {
+      "data.user_email": "{{user.email}}"
+    },
+    "delete": {
+      "data.user_email": "{{user.email}}"
+    }
+  }
+}

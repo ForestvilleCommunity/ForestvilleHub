@@ -1,0 +1,74 @@
+{
+  "name": "PlayerNote",
+  "type": "object",
+  "properties": {
+    "player_id": {
+      "type": "string",
+      "title": "Player"
+    },
+    "team_id": {
+      "type": "string",
+      "title": "Team"
+    },
+    "coach_user_email": {
+      "type": "string",
+      "title": "Coach Email"
+    },
+    "note": {
+      "type": "string",
+      "title": "Coaching Note"
+    },
+    "visibility": {
+      "type": "string",
+      "title": "Visibility",
+      "enum": [
+        "Coach",
+        "Admin",
+        "Both"
+      ],
+      "default": "Both"
+    }
+  },
+  "required": [
+    "player_id",
+    "note"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "$or": [
+        {
+          "data.coach_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.coach_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.coach_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
+    }
+  }
+}

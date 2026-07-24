@@ -1,0 +1,235 @@
+{
+  "name": "Drill",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Name"
+    },
+    "item_type": {
+      "type": "string",
+      "title": "Type",
+      "enum": [
+        "Drill",
+        "Play"
+      ],
+      "default": "Drill"
+    },
+    "theme": {
+      "type": "string",
+      "title": "Theme",
+      "enum": [
+        "Ball Handling",
+        "Finishing",
+        "Shooting",
+        "Passing",
+        "Footwork",
+        "Decision Making",
+        "Defense",
+        "Transition",
+        "Small-Sided Games",
+        "Team Concepts",
+        "Competitive",
+        "Press Break",
+        "Rebounding"
+      ]
+    },
+    "play_category": {
+      "type": "string",
+      "title": "Play Theme",
+      "enum": [
+        "Half Court Offense",
+        "Transition Offense",
+        "Inbound Play",
+        "Press Break",
+        "Defensive System",
+        "Special Situation"
+      ]
+    },
+    "skill_focus": {
+      "type": "string",
+      "title": "Skill Focus"
+    },
+    "age_group": {
+      "type": "string",
+      "title": "Age Group"
+    },
+    "level": {
+      "type": "number",
+      "title": "Difficulty",
+      "enum": [
+        1,
+        2,
+        3
+      ]
+    },
+    "players_needed": {
+      "type": "string",
+      "title": "Players Needed"
+    },
+    "duration_minutes": {
+      "type": "number",
+      "title": "Duration (mins)"
+    },
+    "equipment": {
+      "type": "string",
+      "title": "Equipment"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "coaching_points": {
+      "type": "string",
+      "title": "Teaching Points"
+    },
+    "progressions": {
+      "type": "string",
+      "title": "Progressions"
+    },
+    "regressions": {
+      "type": "string",
+      "title": "Regressions"
+    },
+    "competitive": {
+      "type": "boolean",
+      "title": "Competitive",
+      "default": false
+    },
+    "coach_notes": {
+      "type": "string",
+      "title": "Coach Notes"
+    },
+    "tags": {
+      "type": "string",
+      "title": "Tags"
+    },
+    "formation": {
+      "type": "string",
+      "title": "Formation"
+    },
+    "trigger": {
+      "type": "string",
+      "title": "Trigger"
+    },
+    "primary_objective": {
+      "type": "string",
+      "title": "Primary Objective"
+    },
+    "secondary_option": {
+      "type": "string",
+      "title": "Secondary Option"
+    },
+    "counter": {
+      "type": "string",
+      "title": "Counter"
+    },
+    "video_url": {
+      "type": "string",
+      "title": "Video Link"
+    },
+    "image_url": {
+      "type": "string",
+      "title": "Primary Image URL"
+    },
+    "extra_images": {
+      "type": "string",
+      "title": "Extra Images (JSON array)"
+    },
+    "drawing_data": {
+      "type": "string",
+      "title": "Drawing Data"
+    },
+    "visibility": {
+      "type": "string",
+      "title": "Visibility",
+      "enum": [
+        "Private",
+        "Club",
+        "Template"
+      ],
+      "default": "Private"
+    },
+    "owner_user_email": {
+      "type": "string",
+      "title": "Owner Email"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "Active",
+        "Draft",
+        "Archived"
+      ],
+      "default": "Draft"
+    }
+  },
+  "required": [
+    "name",
+    "item_type"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "data.visibility": "Template"
+        },
+        {
+          "data.visibility": "Club"
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "$and": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "data.visibility": "Template"
+            }
+          ]
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "$and": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "data.visibility": "Template"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

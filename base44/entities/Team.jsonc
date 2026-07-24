@@ -1,0 +1,153 @@
+{
+  "name": "Team",
+  "type": "object",
+  "properties": {
+    "team_name": {
+      "type": "string",
+      "title": "Team Name"
+    },
+    "age_group": {
+      "type": "string",
+      "title": "Age Group"
+    },
+    "program_type": {
+      "type": "string",
+      "title": "Program Type",
+      "enum": [
+        "Club",
+        "Domestic",
+        "District",
+        "Academy",
+        "Private",
+        "Independent"
+      ]
+    },
+    "gender": {
+      "type": "string",
+      "title": "Gender",
+      "enum": [
+        "Male",
+        "Female",
+        "Mixed"
+      ]
+    },
+    "season": {
+      "type": "string",
+      "title": "Season"
+    },
+    "club_name": {
+      "type": "string",
+      "title": "Club Name"
+    },
+    "training_venue": {
+      "type": "string",
+      "title": "Training Venue"
+    },
+    "training_court": {
+      "type": "string",
+      "title": "Training Court"
+    },
+    "training_day": {
+      "type": "string",
+      "title": "Training Day",
+      "enum": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday"
+      ]
+    },
+    "training_start_time": {
+      "type": "string",
+      "title": "Training Start Time"
+    },
+    "training_end_time": {
+      "type": "string",
+      "title": "Training End Time"
+    },
+    "visibility": {
+      "type": "string",
+      "title": "Visibility",
+      "enum": [
+        "Private",
+        "Club"
+      ],
+      "default": "Private"
+    },
+    "owner_user_email": {
+      "type": "string",
+      "title": "Owner Email"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "Active",
+        "Inactive"
+      ],
+      "default": "Active"
+    },
+    "is_demo": {
+      "type": "boolean",
+      "title": "Demo Content",
+      "default": false
+    }
+  },
+  "required": [
+    "team_name"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "data.visibility": "Club"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.owner_user_email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

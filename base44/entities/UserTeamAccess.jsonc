@@ -1,0 +1,66 @@
+{
+  "name": "UserTeamAccess",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "title": "Coach Email"
+    },
+    "team_id": {
+      "type": "string",
+      "title": "Team ID"
+    },
+    "role": {
+      "type": "string",
+      "title": "Role",
+      "enum": [
+        "coach",
+        "assistant"
+      ],
+      "default": "coach"
+    },
+    "can_edit": {
+      "type": "boolean",
+      "title": "Can Edit",
+      "default": true
+    },
+    "assigned_by_admin": {
+      "type": "boolean",
+      "title": "Assigned by Admin",
+      "default": false
+    }
+  },
+  "required": [
+    "user_email",
+    "team_id"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
