@@ -27,6 +27,7 @@ alter table public.email_templates     enable row level security;
 alter table public.emails              enable row level security;
 alter table public.email_recipients    enable row level security;
 alter table public.notifications       enable row level security;
+alter table public.push_subscriptions  enable row level security;
 
 -- ── Helper: is the current user an admin? ───────────────────
 create or replace function public.is_admin()
@@ -386,3 +387,9 @@ create policy "Users can view own notifications"
 
 create policy "Users can mark own notifications read"
   on public.notifications for update using (recipient_id = auth.uid()) with check (recipient_id = auth.uid());
+
+-- ============================================================
+-- PUSH SUBSCRIPTIONS  (each coach manages only their own device subscriptions)
+-- ============================================================
+create policy "Users manage own push subscriptions"
+  on public.push_subscriptions for all using (user_id = auth.uid()) with check (user_id = auth.uid());

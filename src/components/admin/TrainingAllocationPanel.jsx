@@ -4,13 +4,24 @@ import { db } from '@/api/db';
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 const IC = 'w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
-const EMPTY = { venue_id: '', court_id: '', day: '', start_time: '', end_time: '', notes: '' };
+const EMPTY = { venue_id: '', court_id: '', day: '', start_time: '', end_time: '', notes: '', pause_start: '', pause_end: '' };
 
 function fmt12(t) {
   if (!t) return '';
   const [h, m] = t.split(':');
   const hr = parseInt(h, 10);
   return `${hr % 12 || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`;
+}
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function isPaused(a) {
+  if (!a.pause_start || !a.pause_end) return false;
+  const t = todayStr();
+  return t >= a.pause_start && t <= a.pause_end;
 }
 
 export default function TrainingAllocationPanel({ entityType, entityId, entityName, fallbackSquadId, autoOpenAdd, showAddButton = true, readOnly = false }) {
@@ -79,6 +90,8 @@ export default function TrainingAllocationPanel({ entityType, entityId, entityNa
       start_time: a.start_time || '',
       end_time: a.end_time || '',
       notes: a.notes || '',
+      pause_start: a.pause_start || '',
+      pause_end: a.pause_end || '',
     });
     setShowForm(true);
   };
@@ -132,6 +145,8 @@ export default function TrainingAllocationPanel({ entityType, entityId, entityNa
         court_id: form.court_id || null,
         venue: selectedVenue?.name || '',
         court: selectedCourt?.name || '',
+        pause_start: form.pause_start || null,
+        pause_end: form.pause_end || null,
         allocation_type: entityType,
         team_id: entityType === 'Team' ? entityId : null,
         squad_id: entityType === 'Squad' ? entityId : null,
@@ -170,6 +185,7 @@ export default function TrainingAllocationPanel({ entityType, entityId, entityNa
                   <Clock size={10} />{fmt12(a.start_time)}{a.end_time ? ` – ${fmt12(a.end_time)}` : ''}
                 </span>
               )}
+              {isPaused(a) && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">⏸ Paused</span>}
             </div>
             {(getVenueName(a) || getCourtName(a)) && (
               <span className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
@@ -232,6 +248,14 @@ export default function TrainingAllocationPanel({ entityType, entityId, entityNa
             <div className="col-span-2">
               <label className="text-xs font-semibold text-slate-500 block mb-1">Notes</label>
               <input value={form.notes} onChange={e => upd('notes', e.target.value)} placeholder="Optional notes" className={IC} />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 block mb-1">Pause from</label>
+              <input type="date" value={form.pause_start} onChange={e => upd('pause_start', e.target.value)} className={IC} />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 block mb-1">Pause until</label>
+              <input type="date" value={form.pause_end} onChange={e => upd('pause_end', e.target.value)} className={IC} />
             </div>
           </div>
           <div className="flex gap-2 pt-1">

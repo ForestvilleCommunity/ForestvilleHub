@@ -8,6 +8,8 @@ const DEFAULT_SEASON = { name: '2025-2026', startDate: '2025-01-01' };
 // (stale but instant) until that fetch completes, then to a hardcoded default.
 let cachedSeason = null;
 let cachedSettingsId = null;
+let cachedBookingWindowDays = null; // null = not yet loaded OR no limit set — see getBookingWindowDays()
+let bookingWindowLoaded = false;
 
 function readLocalMirror() {
   try {
@@ -40,11 +42,38 @@ export async function initSeasonFromServer() {
     if (!row) return;
     cachedSettingsId = row.id;
     cachedSeason = { name: row.current_season_name, startDate: row.current_season_start_date };
+    cachedBookingWindowDays = row.booking_window_days ?? null;
+    bookingWindowLoaded = true;
     writeLocalMirror(cachedSeason);
     window.dispatchEvent(new Event('coachpad-season-change'));
   } catch {
     // Offline or RLS hiccup — keep using the local mirror/default silently.
   }
+}
+
+// Days a non-admin coach may book a session that claims a venue/court, ahead
+// of today. Null = no limit configured. Returns null (not yet loaded) until
+// initSeasonFromServer() resolves — callers should treat that as "unknown,
+// don't block" rather than "no limit", since it settles within one request.
+export function getBookingWindowDays() {
+  return bookingWindowLoaded ? cachedBookingWindowDays : undefined;
+}
+
+export async function setBookingWindowDays(days) {
+  const me = await db.auth.me().catch(() => null);
+  const payload = { booking_window_days: days, updated_by: me?.id || null };
+  if (!cachedSettingsId) {
+    const rows = await db.entities.ClubSettings.list().catch(() => []);
+    cachedSettingsId = rows?.[0]?.id || null;
+  }
+  if (cachedSettingsId) {
+    await db.entities.ClubSettings.update(cachedSettingsId, payload);
+  } else {
+    const created = await db.entities.ClubSettings.create(payload);
+    cachedSettingsId = created.id;
+  }
+  cachedBookingWindowDays = days;
+  bookingWindowLoaded = true;
 }
 
 export async function setCurrentSeason(season) {

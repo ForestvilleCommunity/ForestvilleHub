@@ -13,6 +13,17 @@ function fmt12(t) {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')}${ampm}`;
 }
 
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function isPaused(a) {
+  if (!a.pause_start || !a.pause_end) return false;
+  const t = todayISO();
+  return t >= a.pause_start && t <= a.pause_end;
+}
+
 function monthRange() {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -21,10 +32,10 @@ function monthRange() {
 }
 
 const CARDS = [
-  { key: 'members',  label: 'Total Members',   bg: 'bg-blue-600',   icon: '👥' },
-  { key: 'teams',    label: 'Active Teams',     bg: 'bg-green-600',  icon: '🏀' },
-  { key: 'coaches',  label: 'Coaches',          bg: 'bg-amber-600',  icon: '👤' },
-  { key: 'sessions', label: 'Sessions This Month', bg: 'bg-indigo-600', icon: '📅' },
+  { key: 'members',  label: 'Total Members',   bg: 'bg-blue-600',   icon: '👥', tab: 'members' },
+  { key: 'teams',    label: 'Active Teams',     bg: 'bg-green-600',  icon: '🏀', tab: 'teams' },
+  { key: 'coaches',  label: 'Coaches',          bg: 'bg-amber-600',  icon: '👤', tab: 'coaches' },
+  { key: 'sessions', label: 'Sessions This Month', bg: 'bg-indigo-600', icon: '📅', tab: 'training' },
 ];
 
 export default function AdminOverviewTab({ onTabChange }) {
@@ -76,7 +87,7 @@ export default function AdminOverviewTab({ onTabChange }) {
     setRecent(recent);
 
     // Today's training allocations
-    setToday(allocations.filter(a => a.day === TODAY));
+    setToday(allocations.filter(a => a.day === TODAY && !isPaused(a)));
 
     // Members with no team assigned
     setUnassigned(activeMembers.filter(m => !m.team_id).length);
@@ -322,12 +333,13 @@ export default function AdminOverviewTab({ onTabChange }) {
       <div>
         <h2 className="font-bold text-slate-900 text-lg mb-3">Club Overview</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {CARDS.map(({ key, label, bg, icon }) => (
-            <div key={key} className={`${bg} rounded-2xl p-4 text-white`}>
+          {CARDS.map(({ key, label, bg, icon, tab }) => (
+            <button key={key} onClick={() => onTabChange?.(tab)}
+              className={`${bg} rounded-2xl p-4 text-white text-left hover:opacity-90 active:scale-[0.98] transition-all`}>
               <div className="text-2xl mb-1">{icon}</div>
               <p className="text-3xl font-black">{stats[key] ?? 0}</p>
               <p className="text-xs font-semibold mt-1 text-white/80">{label}</p>
-            </div>
+            </button>
           ))}
         </div>
       </div>

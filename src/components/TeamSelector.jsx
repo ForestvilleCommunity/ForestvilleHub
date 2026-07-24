@@ -119,42 +119,44 @@ export default function TeamSelector() {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-2 bg-white rounded-xl shadow-2xl border border-slate-100 min-w-[220px] w-max max-w-[90vw] z-50 overflow-hidden">
-          <div className="px-3 py-2 border-b border-slate-100">
+        <div className="absolute left-0 top-full mt-2 bg-white rounded-xl shadow-2xl border border-slate-100 min-w-[220px] w-max max-w-[90vw] z-50 overflow-hidden flex flex-col max-h-[70vh]">
+          <div className="px-3 py-2 border-b border-slate-100 shrink-0">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Your Teams</p>
           </div>
 
-          {teams.length === 0 && (
-            <div className="px-4 py-3 text-sm text-slate-400 text-center">No teams yet</div>
-          )}
+          <div className="overflow-y-auto flex-1 min-h-0">
+            {teams.length === 0 && (
+              <div className="px-4 py-3 text-sm text-slate-400 text-center">No teams yet</div>
+            )}
 
-          {teams.map(team => (
-            <div key={team.id} className="relative group flex items-center">
-              <button
-                onClick={() => { setActiveTeam(team); setOpen(false); }}
-                className={`flex-1 px-4 py-2.5 text-left text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors ${activeTeam?.id === team.id ? 'bg-blue-50 text-blue-700' : 'text-slate-700'}`}
-              >
-                {team.visibility === 'Club' ? (
-                  <Shield size={13} className="text-blue-400 shrink-0" />
-                ) : (
-                  <Lock size={13} className="text-slate-300 shrink-0" />
-                )}
-                <span className="truncate flex-1">{team.team_name}</span>
-                {team.age_group && <span className="text-xs text-slate-400 shrink-0">{team.age_group}</span>}
-              </button>
-              {canDeleteTeam(team) && (
+            {teams.map(team => (
+              <div key={team.id} className="relative group flex items-center">
                 <button
-                  onClick={(e) => prepareDelete(e, team)}
-                  title="Delete this team"
-                  className="shrink-0 mr-2 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                  onClick={() => { setActiveTeam(team); setOpen(false); }}
+                  className={`flex-1 px-4 py-2.5 text-left text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors ${activeTeam?.id === team.id ? 'bg-blue-50 text-blue-700' : 'text-slate-700'}`}
                 >
-                  <Trash2 size={13} />
+                  {team.visibility === 'Club' ? (
+                    <Shield size={13} className="text-blue-400 shrink-0" />
+                  ) : (
+                    <Lock size={13} className="text-slate-300 shrink-0" />
+                  )}
+                  <span className="truncate flex-1">{team.team_name}</span>
+                  {team.age_group && <span className="text-xs text-slate-400 shrink-0">{team.age_group}</span>}
                 </button>
-              )}
-            </div>
-          ))}
+                {canDeleteTeam(team) && (
+                  <button
+                    onClick={(e) => prepareDelete(e, team)}
+                    title="Delete this team"
+                    className="shrink-0 mr-2 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
 
-          <div className="border-t border-slate-100 px-3 py-2">
+          <div className="border-t border-slate-100 px-3 py-2 shrink-0">
             <button
               onClick={() => { setOpen(false); setShowCreate(true); }}
               className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-blue-600 font-semibold hover:bg-blue-50 transition-colors"

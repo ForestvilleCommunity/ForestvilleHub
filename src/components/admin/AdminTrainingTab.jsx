@@ -5,6 +5,7 @@ import AdminVenuesTab from './AdminVenuesTab';
 import TrainingScheduleTab from './TrainingScheduleTab';
 import { Spinner } from './shared';
 import SearchableSelect from './SearchableSelect';
+import { getBookingWindowDays, setBookingWindowDays } from '@/lib/season.js';
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 const EMPTY_ALLOC = { entity: '', day: '', start_time: '', end_time: '', venue_id: '', court_id: '', notes: '' };
@@ -131,6 +132,58 @@ function AddTrainingModal({ onClose, onSaved, initialVenues, initialCourts, init
   );
 }
 
+function TrainingSettingsModal({ onClose }) {
+  const [days, setDays] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const current = getBookingWindowDays();
+    if (current !== undefined) setDays(current == null ? '' : String(current));
+    else db.entities.ClubSettings.list().then(rows => {
+      const v = rows?.[0]?.booking_window_days;
+      setDays(v == null ? '' : String(v));
+    }).catch(() => {});
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await setBookingWindowDays(days.trim() === '' ? null : Number(days));
+      onClose();
+    } catch (e) {
+      alert('Error saving settings: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-200">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={18} /></button>
+          <h2 className="font-bold text-slate-900">Schedule Settings</h2>
+        </div>
+        <div className="p-5 space-y-2">
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Booking window (days)</label>
+          <input type="number" min="0" value={days} onChange={e => setDays(e.target.value)}
+            placeholder="No limit" className={IC} />
+          <p className="text-xs text-slate-400">
+            Coaches won't be able to book a session with a venue/court further than this many days ahead.
+            Leave blank for no limit. Admins are never limited.
+          </p>
+        </div>
+        <div className="px-5 pb-5 pt-3 flex gap-3 border-t border-slate-100">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600">Cancel</button>
+          <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const SUB_TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'schedule', label: 'Schedule' },
@@ -231,15 +284,18 @@ function CourtsTab() {
   );
 }
 
-export default function AdminTrainingTab({ onProfileClick, resetTrigger, subTab: subTabProp, onSubTabChange, triggerAddVenue, triggerAddTraining }) {
+export default function AdminTrainingTab({ onProfileClick, resetTrigger, subTab: subTabProp, onSubTabChange, triggerAddVenue, triggerAddTraining, triggerSettings }) {
   const [localSubTab, setLocalSubTab] = useState('overview');
   const subTab = subTabProp ?? localSubTab;
   const setSubTab = onSubTabChange ?? setLocalSubTab;
   const [overviewData, setOverviewData] = useState(null);
   const [showAddTraining, setShowAddTraining] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [expandedDays, setExpandedDays] = useState({});
 
-  useEffect(() => { if (resetTrigger) { setSubTab('overview'); setShowAddTraining(false); } }, [resetTrigger]);
+  useEffect(() => { if (resetTrigger) { setSubTab('overview'); setShowAddTraining(false); setShowSettings(false); } }, [resetTrigger]);
   useEffect(() => { if (!triggerAddTraining) return; setShowAddTraining(true); }, [triggerAddTraining]);
+  useEffect(() => { if (!triggerSettings) return; setShowSettings(true); }, [triggerSettings]);
 
   const loadOverview = () => {
     Promise.all([
@@ -269,6 +325,8 @@ export default function AdminTrainingTab({ onProfileClick, resetTrigger, subTab:
           initialSquads={overviewData?.squads}
         />
       )}
+
+      {showSettings && <TrainingSettingsModal onClose={() => setShowSettings(false)} />}
 
       {/* Sub-tab bar */}
       <div className="bg-white border-b border-slate-200 flex shrink-0 overflow-x-auto">
@@ -333,18 +391,40 @@ export default function AdminTrainingTab({ onProfileClick, resetTrigger, subTab:
                     <div>
                       <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Weekly Schedule</p>
                       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                        {Object.entries(byDay).map(([day, allocs], i) => (
-                          <div key={day} className={`px-4 py-3 flex items-start gap-3 ${i > 0 ? 'border-t border-slate-100' : ''}`}>
-                            <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">{day.slice(0,3).toUpperCase()}</span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {allocs.sort((a,b) => (a.start_time||'').localeCompare(b.start_time||'')).map(a => (
-                                <span key={a.id} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded-lg font-medium">
-                                  {getName(a)}{a.start_time ? ` ${fmt12(a.start_time)}` : ''}
-                                </span>
-                              ))}
+                        {Object.entries(byDay).map(([day, allocs], i) => {
+                          const sorted = allocs.sort((a,b) => (a.start_time||'').localeCompare(b.start_time||''));
+                          const expanded = !!expandedDays[day];
+                          const shown = expanded ? sorted : sorted.slice(0, 3);
+                          const hiddenCount = sorted.length - shown.length;
+                          return (
+                            <div key={day} className={`px-4 py-3 flex items-start gap-3 ${i > 0 ? 'border-t border-slate-100' : ''}`}>
+                              <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">{day.slice(0,3).toUpperCase()}</span>
+                              <div className="flex flex-wrap gap-1.5 items-center">
+                                {shown.map(a => (
+                                  <span key={a.id} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded-lg font-medium">
+                                    {getName(a)}{a.start_time ? ` ${fmt12(a.start_time)}` : ''}
+                                  </span>
+                                ))}
+                                {hiddenCount > 0 && (
+                                  <button
+                                    onClick={() => setExpandedDays(prev => ({ ...prev, [day]: true }))}
+                                    className="text-xs text-blue-600 hover:text-blue-700 px-2 py-1 font-semibold"
+                                  >
+                                    +{hiddenCount} more
+                                  </button>
+                                )}
+                                {expanded && sorted.length > 3 && (
+                                  <button
+                                    onClick={() => setExpandedDays(prev => ({ ...prev, [day]: false }))}
+                                    className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 font-semibold"
+                                  >
+                                    Show less
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

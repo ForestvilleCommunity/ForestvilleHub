@@ -16,6 +16,7 @@ import DrillBuilder from './pages/DrillBuilder';
 import Sessions from './pages/Sessions';
 import SessionBuilder from './pages/SessionBuilder';
 import LiveSession from './pages/LiveSession';
+import Schedule from './pages/Schedule';
 import Games from './pages/Games';
 import Stats from './pages/Stats';
 import GameBuilder from './pages/GameBuilder';
@@ -52,6 +53,7 @@ const AuthenticatedApp = () => {
           <Route path="/players" element={<Players />} />
           <Route path="/drills" element={<DrillLibrary />} />
           <Route path="/sessions" element={<Sessions />} />
+          <Route path="/schedule" element={<Schedule />} />
           <Route path="/games" element={<Games />} />
           <Route path="/stats" element={<Stats />} />
         </Route>

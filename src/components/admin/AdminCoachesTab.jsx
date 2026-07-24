@@ -27,6 +27,7 @@ export default function AdminCoachesTab({ onProfileClick, resetTrigger, triggerA
   const [loading, setLoading] = useState(true);
   const [selectedCoach, setSelectedCoach] = useState(null);
   const [assignModal, setAssignModal] = useState(null);
+  const [assignSearch, setAssignSearch] = useState('');
   const [selectMode, setSelectMode] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filterTeam, setFilterTeam] = useState('');
@@ -39,6 +40,7 @@ export default function AdminCoachesTab({ onProfileClick, resetTrigger, triggerA
   const exitSelectMode = () => { setSelectMode(false); setSelectedCoachIds(new Set()); };
 
   useEffect(() => { if (resetTrigger) { setShowForm(false); setSelectedCoach(null); setAssignModal(null); setFilterTeam(''); } }, [resetTrigger]);
+  useEffect(() => { setAssignSearch(''); }, [assignModal]);
   useEffect(() => { if (!triggerAdd) return; setShowForm(true); }, [triggerAdd]);
   useEffect(() => { if (!triggerExport) return; setShowExport(true); }, [triggerExport]);
   useEffect(() => { if (!triggerSettings) return; setSelectedCoach(null); setDraftSettings(loadCoachesSettings()); setShowSettings(true); }, [triggerSettings]);
@@ -274,8 +276,18 @@ export default function AdminCoachesTab({ onProfileClick, resetTrigger, triggerA
               <button onClick={() => setAssignModal(null)} className="text-slate-400"><X size={16} /></button>
             </div>
             <p className="text-xs text-slate-500 mb-4">{assignModal.full_name || assignModal.email}</p>
+            <div className="relative mb-3">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                autoFocus
+                value={assignSearch}
+                onChange={e => setAssignSearch(e.target.value)}
+                placeholder="Search teams..."
+                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
             <div className="space-y-2 max-h-72 overflow-y-auto">
-              {teams.map(t => {
+              {teams.filter(t => !assignSearch || t.team_name?.toLowerCase().includes(assignSearch.toLowerCase())).map(t => {
                 const already = access.some(a => a.user_email === assignModal.email && a.team_id === t.id);
                 const acc = access.find(a => a.user_email === assignModal.email && a.team_id === t.id);
                 return (
@@ -291,6 +303,9 @@ export default function AdminCoachesTab({ onProfileClick, resetTrigger, triggerA
                 );
               })}
               {teams.length === 0 && <p className="text-sm text-slate-400 text-center py-4">No teams yet.</p>}
+              {teams.length > 0 && teams.filter(t => !assignSearch || t.team_name?.toLowerCase().includes(assignSearch.toLowerCase())).length === 0 && (
+                <p className="text-sm text-slate-400 text-center py-4">No teams match "{assignSearch}".</p>
+              )}
             </div>
             <button onClick={() => setAssignModal(null)} className="mt-4 w-full border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm font-semibold">Done</button>
           </div>

@@ -1,10 +1,11 @@
 ﻿import { useState, useEffect, useMemo, useRef } from 'react';
-import { MapPin, Clock, Users, CalendarDays, SlidersHorizontal, X, Search, LayoutList, Timer } from 'lucide-react';
+import { MapPin, Clock, Users, CalendarDays, SlidersHorizontal, X, Search, LayoutList, Timer, CheckSquare, Check, Trash2, Pause } from 'lucide-react';
 import { db } from '@/api/db';
 import { Spinner } from './shared';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+const SEL_CLS = 'w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white';
 const DAYS      = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 const DAY_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const HOUR_START = 6;
@@ -45,6 +46,17 @@ function fmt12(t) {
   const [h, m] = t.split(':');
   const hr = parseInt(h, 10);
   return `${hr % 12 || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`;
+}
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function isPaused(alloc) {
+  if (!alloc.pause_start || !alloc.pause_end) return false;
+  const t = todayStr();
+  return t >= alloc.pause_start && t <= alloc.pause_end;
 }
 
 function getSquadTeamIds(sq) {
@@ -237,22 +249,28 @@ function CourtGantt({ dayAllocs, allocInfo, onSelect, venueEntities }) {
                         const info      = allocInfo(a);
                         const narrow    = width < 80;
                         const conflict  = conflictingIds.has(a.id);
+                        const paused    = isPaused(a);
                         return (
                           <button key={a.id} onClick={() => onSelect(a)}
                             style={{ position: 'absolute', left, top: 8, bottom: 8, width,
                               ...(conflict ? { outline: '2.5px solid #ef4444', outlineOffset: '1px' } : {}) }}
                             className={`rounded-2xl ${conflict ? 'bg-red-500' : info.color.bg} text-white px-2.5 flex flex-col justify-center
-                                        overflow-hidden hover:opacity-90 active:scale-95 transition-all shadow-md`}>
+                                        overflow-hidden hover:opacity-90 active:scale-95 transition-all shadow-md ${paused ? 'opacity-50' : ''}`}>
+                            {paused && (
+                              <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-amber-400 flex items-center justify-center shadow">
+                                <Pause size={9} className="text-amber-950" fill="currentColor" />
+                              </div>
+                            )}
                             {conflict && !narrow && (
                               <p className="text-[9px] font-black text-white/90 leading-none mb-0.5 uppercase tracking-wide">⚠ Overlap</p>
                             )}
                             <p className="font-bold text-[12px] leading-tight truncate">{info.name}</p>
                             {!narrow && (
                               <p className="text-[10px] text-white/80 mt-0.5 leading-tight truncate">
-                                {fmt12(a.start_time)} – {fmt12(a.end_time)}
+                                {paused ? 'Paused' : `${fmt12(a.start_time)} – ${fmt12(a.end_time)}`}
                               </p>
                             )}
-                            {!narrow && info.ageGroup && (
+                            {!narrow && !paused && info.ageGroup && (
                               <p className="text-[10px] text-white/70 leading-tight truncate">{info.ageGroup}</p>
                             )}
                           </button>
@@ -330,11 +348,17 @@ function Timeline({ allocs, allocInfo, onSelect }) {
             const GAP = 3;
             const pct  = 100 / total;
             const short = height < 58;
+            const paused = isPaused(a);
             return (
               <button key={a.id} onClick={() => onSelect(a)}
                 style={{ position:'absolute', top: top+2, height, left:`calc(${lane*pct}% + ${GAP}px)`, width:`calc(${pct}% - ${GAP*2}px)` }}
-                className={`rounded-2xl ${info.color.light} border ${info.color.border} hover:brightness-95 active:scale-[0.98] transition-all text-left overflow-hidden shadow-sm`}>
+                className={`rounded-2xl ${info.color.light} border ${info.color.border} hover:brightness-95 active:scale-[0.98] transition-all text-left overflow-hidden shadow-sm ${paused ? 'opacity-60' : ''}`}>
                 <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl ${info.color.bg}`} />
+                {paused && (
+                  <div className="absolute top-1 right-1 flex items-center gap-0.5 bg-amber-400 text-amber-950 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                    <Pause size={8} fill="currentColor" /> Paused
+                  </div>
+                )}
                 <div className="pl-4 pr-2 pt-2 pb-2 h-full flex flex-col justify-center gap-0.5">
                   <p className={`font-bold text-[12px] leading-tight truncate ${info.color.text}`}>{info.name}</p>
                   {!short && a.start_time && <p className="text-[11px] text-slate-500 leading-tight font-medium">{fmt12(a.start_time)}{a.end_time ? ` – ${fmt12(a.end_time)}` : ''}</p>}
@@ -351,7 +375,7 @@ function Timeline({ allocs, allocInfo, onSelect }) {
 
 // ── List view ─────────────────────────────────────────────────────────────────
 
-function ListView({ activeDays, byDay, allocInfo, onSelect, total }) {
+function ListView({ activeDays, byDay, allocInfo, onSelect, total, selectMode, selectedIds, onToggleSelect }) {
   if (!activeDays.length) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-8">
       <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center"><CalendarDays size={24} className="text-slate-300" /></div>
@@ -374,19 +398,30 @@ function ListView({ activeDays, byDay, allocInfo, onSelect, total }) {
               {byDay[day].map(a => {
                 const info = allocInfo(a);
                 const timeStr = a.start_time ? `${fmt12(a.start_time)}${a.end_time ? ` – ${fmt12(a.end_time)}` : ''}` : null;
+                const checked = selectedIds?.has(a.id);
                 return (
-                  <button key={a.id} onClick={() => onSelect(a)}
-                    className="w-full text-left flex items-center gap-3 bg-white rounded-2xl border border-slate-200 px-4 py-3.5 hover:border-blue-200 hover:shadow-sm transition-all group">
+                  <button key={a.id} onClick={() => selectMode ? onToggleSelect(a.id) : onSelect(a)}
+                    className={`w-full text-left flex items-center gap-3 bg-white rounded-2xl border px-4 py-3.5 transition-all group ${
+                      checked ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-200 hover:shadow-sm'
+                    }`}>
+                    {selectMode && (
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${checked ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                        {checked && <Check size={12} className="text-white" />}
+                      </div>
+                    )}
                     <div className={`w-1.5 self-stretch rounded-full shrink-0 ${info.color.bg}`} />
                     <div className={`w-9 h-9 ${info.color.bg} text-white rounded-xl flex items-center justify-center font-black text-xs shrink-0`}>{info.name?.substring(0,2).toUpperCase()}</div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-slate-900 text-sm truncate">{info.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-bold text-slate-900 text-sm truncate">{info.name}</p>
+                        {isPaused(a) && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">⏸ Paused</span>}
+                      </div>
                       <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                         {timeStr && <span className="flex items-center gap-1 text-xs text-slate-500"><Clock size={11}/>{timeStr}</span>}
                         {a.venue && <span className="flex items-center gap-1 text-xs text-slate-500"><MapPin size={11}/>{a.venue}{a.court ? ` · Court ${a.court}` : ''}</span>}
                       </div>
                     </div>
-                    <span className="text-slate-300 group-hover:text-blue-400 transition-colors">→</span>
+                    {!selectMode && <span className="text-slate-300 group-hover:text-blue-400 transition-colors">→</span>}
                   </button>
                 );
               })}
@@ -400,9 +435,135 @@ function ListView({ activeDays, byDay, allocInfo, onSelect, total }) {
 
 // ── Slot detail drawer ────────────────────────────────────────────────────────
 
-function SlotDetail({ alloc, info, onClose, onProfileClick }) {
+function SlotDetail({ alloc, info, venueEntities, courts, onClose, onProfileClick, onSave, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(() => ({
+    day: alloc.day || '',
+    start_time: alloc.start_time || '',
+    end_time: alloc.end_time || '',
+    venue_id: alloc.venue_id || '',
+    court_id: alloc.court_id || '',
+    pause_start: alloc.pause_start || '',
+    pause_end: alloc.pause_end || '',
+  }));
+  const [note, setNote] = useState('');
+  const [deleteNote, setDeleteNote] = useState('');
+  const [error, setError] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const filteredCourts = courts.filter(c => !form.venue_id || c.venue_id === form.venue_id);
+
+  const save = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(alloc.id, { ...form, pending_note: note.trim() || null });
+      setEditing(false);
+    } catch (e) {
+      setError(e.message || 'Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDeleteClick = async () => {
+    setDeleting(true);
+    setError('');
+    try {
+      await onDelete(alloc.id, deleteNote.trim() || null);
+    } catch (e) {
+      setError(e.message || 'Failed to delete. Please try again.');
+      setDeleting(false);
+    }
+  };
+
   const timeStr  = alloc.start_time ? `${fmt12(alloc.start_time)}${alloc.end_time ? ` – ${fmt12(alloc.end_time)}` : ''}` : null;
   const duration = alloc.start_time && alloc.end_time ? (() => { const d = timeToMins(alloc.end_time) - timeToMins(alloc.start_time); return d > 0 ? `${d} min` : null; })() : null;
+
+  if (editing) {
+    return (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={onClose}>
+        <div className="bg-white rounded-t-3xl w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100">
+            <h2 className="font-bold text-slate-900">Edit {info.name}</h2>
+            <button onClick={() => setEditing(false)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={18}/></button>
+          </div>
+          <div className="px-5 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Day</label>
+              <select value={form.day} onChange={e => upd('day', e.target.value)} className={SEL_CLS}>
+                {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Start</label>
+                <input type="time" value={form.start_time} onChange={e => upd('start_time', e.target.value)} className={SEL_CLS} />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">End</label>
+                <input type="time" value={form.end_time} onChange={e => upd('end_time', e.target.value)} className={SEL_CLS} />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Venue</label>
+              <select value={form.venue_id} onChange={e => { upd('venue_id', e.target.value); upd('court_id', ''); }} className={SEL_CLS}>
+                <option value="">— No venue —</option>
+                {venueEntities.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+            </div>
+            {filteredCourts.length > 0 && (
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Court</label>
+                <select value={form.court_id} onChange={e => upd('court_id', e.target.value)} className={SEL_CLS}>
+                  <option value="">— No court —</option>
+                  {filteredCourts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="pt-2 border-t border-slate-100">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Pause training (optional)</label>
+              <p className="text-xs text-slate-400 mb-2">Skip this recurring slot between two dates — e.g. school holidays or a venue closure. It resumes automatically after the end date.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 block mb-1">From</label>
+                  <input type="date" value={form.pause_start} onChange={e => upd('pause_start', e.target.value)} className={SEL_CLS} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 block mb-1">Until</label>
+                  <input type="date" value={form.pause_end} onChange={e => upd('pause_end', e.target.value)} className={SEL_CLS} />
+                </div>
+              </div>
+              {(form.pause_start || form.pause_end) && (
+                <button onClick={() => { upd('pause_start', ''); upd('pause_end', ''); }}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-semibold mt-2">
+                  Clear pause dates
+                </button>
+              )}
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Message to coaches (optional)</label>
+              <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
+                placeholder="e.g. Sorry for the short notice — the court's being resurfaced."
+                className={`${SEL_CLS} resize-none`} />
+              <p className="text-xs text-slate-400 mt-1">Sent alongside the automatic notification coaches get whenever this changes.</p>
+            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+          </div>
+          <div className="px-5 pb-6 pt-1 flex gap-3 border-t border-slate-100">
+            <button onClick={() => setEditing(false)} className="flex-1 py-3 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600">Cancel</button>
+            <button onClick={save} disabled={saving || !form.day} className="flex-1 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold disabled:opacity-50 hover:bg-blue-700">
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="bg-white rounded-t-3xl w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -415,9 +576,15 @@ function SlotDetail({ alloc, info, onClose, onProfileClick }) {
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             {info.ageGroup && <span className="text-white/80 text-xs font-semibold bg-white/20 px-2 py-0.5 rounded-full">{info.ageGroup}</span>}
             {duration     && <span className="text-white/80 text-xs font-semibold bg-white/20 px-2 py-0.5 rounded-full">{duration}</span>}
+            {isPaused(alloc) && <span className="text-xs font-bold bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full">⏸ Paused now</span>}
           </div>
         </div>
         <div className="px-5 py-5 space-y-4">
+          {(alloc.pause_start || alloc.pause_end) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-800">
+              Paused from <strong>{alloc.pause_start || '—'}</strong> to <strong>{alloc.pause_end || '—'}</strong>
+            </div>
+          )}
           {timeStr && (
             <div className="flex items-center gap-4">
               <div className={`w-10 h-10 ${info.color.light} ${info.color.border} border rounded-2xl flex items-center justify-center shrink-0`}><Clock size={16} className={info.color.text}/></div>
@@ -437,10 +604,109 @@ function SlotDetail({ alloc, info, onClose, onProfileClick }) {
             </div>
           )}
         </div>
-        <div className="px-5 pb-8 pt-1">
+        <div className="px-5 pb-8 pt-1 space-y-2">
           <button onClick={() => { if (info.isSquad && info.squad) onProfileClick?.('squad', info.squad); else if (info.team) onProfileClick?.('team', info.team); onClose(); }}
             className={`w-full py-3.5 ${info.color.bg} text-white rounded-2xl text-sm font-bold hover:opacity-90 transition-opacity`}>
             View {info.isSquad ? 'Squad' : 'Team'} Profile →
+          </button>
+          {confirmDelete && (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-3 space-y-2">
+              <label className="text-xs font-bold text-red-700 uppercase tracking-wider block mb-1.5">Message to coaches (optional)</label>
+              <textarea value={deleteNote} onChange={e => setDeleteNote(e.target.value)} rows={2}
+                placeholder="e.g. Cancelled due to the venue closure — sorry for the disruption."
+                className="w-full border border-red-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white resize-none" />
+              {error && <p className="text-sm text-red-600">{error}</p>}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button onClick={() => setEditing(true)}
+              className="flex-1 py-3 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+              Edit
+            </button>
+            {!confirmDelete ? (
+              <button onClick={() => setConfirmDelete(true)}
+                className="flex-1 py-3 border border-red-200 rounded-2xl text-sm font-bold text-red-600 hover:bg-red-50 flex items-center justify-center gap-1.5">
+                <Trash2 size={14}/> Delete
+              </button>
+            ) : (
+              <button onClick={confirmDeleteClick} disabled={deleting}
+                className="flex-1 py-3 bg-red-600 text-white rounded-2xl text-sm font-bold hover:bg-red-700 disabled:opacity-50">
+                {deleting ? 'Deleting…' : 'Confirm delete'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bulk move modal ───────────────────────────────────────────────────────────
+
+function BulkMoveModal({ count, venueEntities, courts, onClose, onApply }) {
+  const [venueId, setVenueId] = useState('');
+  const [courtId, setCourtId] = useState('');
+  const [changeTime, setChangeTime] = useState(false);
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const filteredCourts = courts.filter(c => !venueId || c.venue_id === venueId);
+
+  const apply = async () => {
+    setSaving(true);
+    await onApply({ venueId, courtId, changeTime, startTime, endTime });
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-200">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={18} /></button>
+          <h2 className="font-bold text-slate-900">Move {count} training slot{count !== 1 ? 's' : ''}</h2>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">New venue *</label>
+            <select value={venueId} onChange={e => { setVenueId(e.target.value); setCourtId(''); }} className={SEL_CLS}>
+              <option value="">— Select venue —</option>
+              {venueEntities.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+          </div>
+          {filteredCourts.length > 0 && (
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Court</label>
+              <select value={courtId} onChange={e => setCourtId(e.target.value)} className={SEL_CLS}>
+                <option value="">— No specific court —</option>
+                {filteredCourts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={changeTime} onChange={e => setChangeTime(e.target.checked)} className="rounded" />
+            Also change start/end time for all selected
+          </label>
+          {changeTime && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Start</label>
+                <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={SEL_CLS} />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">End</label>
+                <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className={SEL_CLS} />
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-slate-400">
+            Day and team/squad assignment stay the same for all selected sessions — only the venue{filteredCourts.length ? '/court' : ''}{changeTime ? ' and time' : ''} will change.
+          </p>
+        </div>
+        <div className="px-5 pb-5 pt-3 flex gap-3 border-t border-slate-100">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600">Cancel</button>
+          <button onClick={apply} disabled={saving || !venueId} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
+            {saving ? 'Moving…' : `Move ${count}`}
           </button>
         </div>
       </div>
@@ -457,6 +723,7 @@ export default function TrainingScheduleTab({ onProfileClick }) {
   const [access,        setAccess]        = useState([]);
   const [users,         setUsers]         = useState([]);
   const [venueEntities, setVenueEntities] = useState([]);
+  const [courts,        setCourts]        = useState([]);
   const [loading,       setLoading]       = useState(true);
 
   const [view,        setView]        = useState('court'); // 'court' | 'time' | 'list'
@@ -468,6 +735,9 @@ export default function TrainingScheduleTab({ onProfileClick }) {
   const [filterAgeGroup, setFilterAgeGroup] = useState('');
   const [showFilters,    setShowFilters]    = useState(false);
   const [selectedAlloc,  setSelectedAlloc]  = useState(null);
+  const [selectMode,     setSelectMode]     = useState(false);
+  const [selectedIds,    setSelectedIds]    = useState(new Set());
+  const [showBulkMove,   setShowBulkMove]   = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -477,13 +747,67 @@ export default function TrainingScheduleTab({ onProfileClick }) {
       db.entities.UserTeamAccess.list('-created_date', 500).catch(() => []),
       db.entities.User.list('-created_date', 200).catch(() => []),
       db.entities.Venue.list('name', 200).catch(() => []),
-    ]).then(([a, t, sq, acc, u, vs]) => {
-      setAllocations(a); setTeams(t); setSquads(sq); setAccess(acc); setUsers(u); setVenueEntities(vs);
+      db.entities.Court.list('name', 200).catch(() => []),
+    ]).then(([a, t, sq, acc, u, vs, cs]) => {
+      setAllocations(a); setTeams(t); setSquads(sq); setAccess(acc); setUsers(u); setVenueEntities(vs); setCourts(cs);
       const first = DAYS.find(d => a.some(al => al.day === d));
       if (first) setSelectedDay(first);
       setLoading(false);
     });
   }, []);
+
+  const toggleSelectId = (id) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const saveAlloc = async (id, form) => {
+    const selectedVenue = venueEntities.find(v => v.id === form.venue_id);
+    const selectedCourt = courts.find(c => c.id === form.court_id);
+    const payload = {
+      day: form.day,
+      start_time: form.start_time || null,
+      end_time: form.end_time || null,
+      venue_id: form.venue_id || null,
+      court_id: form.court_id || null,
+      venue: selectedVenue?.name || '',
+      court: selectedCourt?.name || '',
+      pause_start: form.pause_start || null,
+      pause_end: form.pause_end || null,
+      pending_note: form.pending_note ?? null,
+    };
+    await db.entities.TrainingAllocation.update(id, payload);
+    setAllocations(prev => prev.map(a => a.id === id ? { ...a, ...payload } : a));
+    setSelectedAlloc(null);
+  };
+
+  const deleteAlloc = async (id, note) => {
+    // A note on a row about to be deleted only reaches the notification
+    // webhook if it's on the row when the DELETE fires — so write it first
+    // (this update alone doesn't trigger a notification: pending_note isn't
+    // in WATCHED_FIELDS), then delete.
+    if (note) {
+      await db.entities.TrainingAllocation.update(id, { pending_note: note }).catch(() => {});
+    }
+    await db.entities.TrainingAllocation.delete(id);
+    setAllocations(prev => prev.filter(a => a.id !== id));
+    setSelectedAlloc(null);
+  };
+
+  const applyBulkMove = async ({ venueId, courtId, changeTime, startTime, endTime }) => {
+    const selectedVenue = venueEntities.find(v => v.id === venueId);
+    const selectedCourt = courts.find(c => c.id === courtId);
+    const payload = {
+      venue_id: venueId || null,
+      court_id: courtId || null,
+      venue: selectedVenue?.name || '',
+      court: selectedCourt?.name || '',
+      ...(changeTime ? { start_time: startTime || null, end_time: endTime || null } : {}),
+    };
+    const ids = [...selectedIds];
+    await Promise.all(ids.map(id => db.entities.TrainingAllocation.update(id, payload).catch(() => {})));
+    setAllocations(prev => prev.map(a => ids.includes(a.id) ? { ...a, ...payload } : a));
+    setShowBulkMove(false);
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
 
   const getSquadById       = id => squads.find(s => s.id === id);
   const getTeamById        = id => teams.find(t => t.id === id);
@@ -543,6 +867,8 @@ export default function TrainingScheduleTab({ onProfileClick }) {
   const clearFilters      = () => { setFilterVenue(''); setFilterSquad(''); setFilterCoach(''); setFilterAgeGroup(''); };
   const SEL = 'w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white';
 
+  useEffect(() => { if (view !== 'list') { setSelectMode(false); setSelectedIds(new Set()); } }, [view]);
+
   if (loading) return <Spinner />;
 
   return (
@@ -576,6 +902,13 @@ export default function TrainingScheduleTab({ onProfileClick }) {
             <LayoutList size={15} />
           </button>
         </div>
+        {view === 'list' && (
+          <button onClick={() => { setSelectMode(m => !m); setSelectedIds(new Set()); }}
+            className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-2 rounded-xl transition-colors shrink-0 ${selectMode ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+            <CheckSquare size={14} />
+            <span className="hidden sm:inline">{selectMode ? 'Cancel' : 'Select'}</span>
+          </button>
+        )}
       </div>
 
       {/* Day strip (Court + Time views) */}
@@ -621,7 +954,19 @@ export default function TrainingScheduleTab({ onProfileClick }) {
             </div>
       )}
       {view === 'list' && (
-        <ListView activeDays={activeDays} byDay={byDay} allocInfo={allocInfo} onSelect={setSelectedAlloc} total={filtered.length} />
+        <ListView activeDays={activeDays} byDay={byDay} allocInfo={allocInfo} onSelect={setSelectedAlloc} total={filtered.length}
+          selectMode={selectMode} selectedIds={selectedIds} onToggleSelect={toggleSelectId} />
+      )}
+
+      {/* Bulk action bar */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="shrink-0 bg-white border-t border-slate-200 px-4 py-3 flex items-center justify-between gap-3">
+          <span className="text-sm font-semibold text-slate-700">{selectedIds.size} selected</span>
+          <div className="flex gap-2">
+            <button onClick={() => setSelectedIds(new Set())} className="px-3 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700">Clear</button>
+            <button onClick={() => setShowBulkMove(true)} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700">Move…</button>
+          </div>
+        </div>
       )}
 
       {/* Filters drawer */}
@@ -657,7 +1002,13 @@ export default function TrainingScheduleTab({ onProfileClick }) {
       )}
 
       {selectedAlloc && (
-        <SlotDetail alloc={selectedAlloc} info={allocInfo(selectedAlloc)} onClose={() => setSelectedAlloc(null)} onProfileClick={onProfileClick} />
+        <SlotDetail alloc={selectedAlloc} info={allocInfo(selectedAlloc)} venueEntities={venueEntities} courts={courts}
+          onClose={() => setSelectedAlloc(null)} onProfileClick={onProfileClick} onSave={saveAlloc} onDelete={deleteAlloc} />
+      )}
+
+      {showBulkMove && (
+        <BulkMoveModal count={selectedIds.size} venueEntities={venueEntities} courts={courts}
+          onClose={() => setShowBulkMove(false)} onApply={applyBulkMove} />
       )}
     </div>
   );

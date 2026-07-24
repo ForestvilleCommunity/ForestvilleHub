@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Save, Check, Users, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { db } from '@/api/db';
 import { getAccessibleTeams, getAccessiblePlayers } from '@/lib/teamAccess';
-import { getCurrentSeason } from '@/lib/season.js';
+import { getCurrentSeason, getBookingWindowDays } from '@/lib/season.js';
 import DrillPicker from '@/components/sessions/DrillPicker';
 import SessionTimeline from '@/components/sessions/SessionTimeline';
 import SessionBlockBuilder, { createDefaultBlocks } from '@/components/sessions/SessionBlockBuilder';
@@ -15,6 +15,13 @@ const PRIVATE_FOCUS_OPTIONS = ['Offense', 'Defense', 'Shooting', 'Ball Handling'
 // Local YYYY-MM-DD for today (so a new session defaults to today's date)
 const todayStr = () => {
   const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// Local YYYY-MM-DD for today + n days
+const dateStrPlusDays = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
@@ -44,6 +51,7 @@ export default function SessionBuilder() {
   const [courts, setCourts] = useState([]);
   const [allocations, setAllocations] = useState([]);
   const [venueTouched, setVenueTouched] = useState(false);
+  const [bookingWindowDays, setBookingWindowDaysState] = useState(null);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(() => ({ ...DEFAULT_FORM, date: todayStr() }));
   const [selectedPrivatePlayers, setSelectedPrivatePlayers] = useState([]);
@@ -71,6 +79,14 @@ export default function SessionBuilder() {
       setVenues(venueList);
       setCourts(courtList);
       setAllocations(allocationList);
+      const cachedWindow = getBookingWindowDays();
+      if (cachedWindow !== undefined) {
+        setBookingWindowDaysState(cachedWindow);
+      } else {
+        db.entities.ClubSettings.list().then(rows => {
+          setBookingWindowDaysState(rows?.[0]?.booking_window_days ?? null);
+        }).catch(() => setBookingWindowDaysState(null));
+      }
       if (isEdit) {
         await loadSession();
       } else {
@@ -186,6 +202,15 @@ export default function SessionBuilder() {
     const errs = {};
     if (!form.session_name?.trim()) errs.session_name = 'Session name is required';
     if (!form.date) errs.date = 'Date is required';
+    // Booking window: only applies when the session actually claims a venue —
+    // this is about capping how far ahead a court gets reserved, not a general
+    // limit on planning sessions. Admins set the policy, so they're exempt.
+    if (form.date && form.venue_id && user?.role !== 'admin' && bookingWindowDays != null) {
+      const maxDate = dateStrPlusDays(bookingWindowDays);
+      if (form.date > maxDate) {
+        errs.date = `Sessions with a venue can only be booked up to ${bookingWindowDays} day${bookingWindowDays !== 1 ? 's' : ''} in advance (on or before ${maxDate}).`;
+      }
+    }
     if (Object.keys(errs).length) { setErrors(errs); toast.error('Please complete the required fields.'); return; }
     setSaving(true);
     try {

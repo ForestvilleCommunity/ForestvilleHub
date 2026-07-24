@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LayoutDashboard, Users, Dumbbell, CalendarCheck, Trophy, LogOut, BarChart2, UserCircle, Trash2, ShieldAlert, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, Dumbbell, CalendarCheck, CalendarClock, LogOut, BarChart2, UserCircle, Trash2, ShieldAlert, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import HelpDrawer from './HelpDrawer';
 import { db } from '@/api/db';
@@ -14,7 +14,7 @@ const navItems = [
   { path: '/players', label: 'Players', icon: Users },
   { path: '/sessions', label: 'Sessions', icon: CalendarCheck },
   { path: '/drills', label: 'Drills', icon: Dumbbell },
-  { path: '/games', label: 'Games', icon: Trophy },
+  { path: '/schedule', label: 'Schedule', icon: CalendarClock },
   { path: '/stats', label: 'Stats', icon: BarChart2 },
 ];
 
@@ -110,7 +110,7 @@ export default function Layout() {
           <div className="flex-1 min-w-0">
             <TeamSelector />
           </div>
-          <NotificationBell userId={currentUser?.id} />
+          <NotificationBell userId={currentUser?.id} align="left" />
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {navItems.map(({ path, label, icon: Icon }) => {

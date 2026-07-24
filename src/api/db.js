@@ -235,5 +235,6 @@ export const db = {
     Email:              makeEntity('emails'),
     EmailRecipient:     makeEntity('email_recipients'),
     Notification:       makeEntity('notifications'),
+    PushSubscription:   makeEntity('push_subscriptions'),
   },
 };

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell } from 'lucide-react';
+import { Bell, BellPlus, BellOff } from 'lucide-react';
 import { db } from '@/api/db';
+import { isPushSupported, getPushStatus, subscribeToPush, unsubscribeFromPush } from '@/lib/pushNotifications';
 
 function timeAgo(dateStr) {
   const diffMs = Date.now() - new Date(dateStr).getTime();
@@ -13,10 +14,12 @@ function timeAgo(dateStr) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export default function NotificationBell({ userId, iconClassName = 'text-slate-400 hover:text-white', buttonClassName = 'hover:bg-slate-800' }) {
+export default function NotificationBell({ userId, iconClassName = 'text-slate-400 hover:text-white', buttonClassName = 'hover:bg-slate-800', align = 'right' }) {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [open, setOpen] = useState(false);
+  const [pushStatus, setPushStatus] = useState('unsupported');
+  const [pushBusy, setPushBusy] = useState(false);
   const containerRef = useRef(null);
 
   const load = useCallback(() => {
@@ -35,12 +38,31 @@ export default function NotificationBell({ userId, iconClassName = 'text-slate-4
   useEffect(() => {
     if (!open) return;
     load();
+    getPushStatus().then(setPushStatus).catch(() => {});
     const onClickOutside = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
     };
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, [open, load]);
+
+  const togglePush = async () => {
+    setPushBusy(true);
+    try {
+      if (pushStatus === 'subscribed') {
+        await unsubscribeFromPush();
+        setPushStatus('unsubscribed');
+      } else {
+        await subscribeToPush(userId);
+        setPushStatus('subscribed');
+      }
+    } catch (e) {
+      setPushStatus(await getPushStatus().catch(() => 'unsubscribed'));
+      if (e.message !== 'Notification permission was not granted') alert(e.message);
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
@@ -74,7 +96,7 @@ export default function NotificationBell({ userId, iconClassName = 'text-slate-4
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-72 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+        <div className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} top-full mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden`}>
           <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
             <p className="text-sm font-bold text-slate-900">Notifications</p>
             {unreadCount > 0 && (
@@ -99,6 +121,26 @@ export default function NotificationBell({ userId, iconClassName = 'text-slate-4
               ))
             )}
           </div>
+          {isPushSupported() && pushStatus !== 'denied' && (
+            <div className="border-t border-slate-100 px-3 py-2">
+              <button onClick={togglePush} disabled={pushBusy}
+                className="w-full flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-800 disabled:opacity-50 py-1">
+                {pushStatus === 'subscribed' ? <BellOff size={13} /> : <BellPlus size={13} />}
+                {pushBusy
+                  ? 'Working…'
+                  : pushStatus === 'subscribed'
+                    ? 'Turn off push notifications'
+                    : 'Get push notifications on this device'}
+              </button>
+            </div>
+          )}
+          {isPushSupported() && pushStatus === 'denied' && (
+            <div className="border-t border-slate-100 px-3 py-2">
+              <p className="text-xs text-slate-400">
+                Push notifications are blocked for CoachPad in your browser settings.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

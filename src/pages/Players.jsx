@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
-import { Search, Plus, Users } from 'lucide-react';
+import { Search, Plus, Users, X } from 'lucide-react';
 import Pagination from '@/components/admin/Pagination';
 import { db } from '@/api/db';
 import { getActiveTeam, subscribeActiveTeam } from '@/lib/activeTeam';
@@ -210,11 +210,19 @@ export default function Players() {
       )}
 
       {viewPlayer && (
-        <PlayerProfile
-          player={viewPlayer}
-          teamName={teamMap[viewPlayer.team_id]}
-          onClose={() => setViewPlayer(null)}
-        />
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-start sm:items-center justify-center" onClick={() => setViewPlayer(null)}>
+          <div className="relative bg-white w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:rounded-3xl overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setViewPlayer(null)}
+              className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/20 hover:bg-black/30 text-white flex items-center justify-center backdrop-blur-sm transition-colors">
+              <X size={16} />
+            </button>
+            <PlayerProfile
+              player={viewPlayer}
+              teamName={teamMap[viewPlayer.team_id]}
+              onClose={() => setViewPlayer(null)}
+            />
+          </div>
+        </div>
       )}
 
       {showModal && (

@@ -189,6 +189,9 @@ create table public.training_allocations (
   end_time     time,
   notes        text,
   status       text not null default 'Active' check (status in ('Active', 'Inactive')),
+  pause_start  date,
+  pause_end    date,
+  pending_note text,
   created_by   uuid references auth.users(id),
   created_at   timestamptz not null default now(),
   check (team_id is not null or squad_id is not null)
@@ -394,6 +397,7 @@ create table public.club_settings (
   id                         uuid primary key default uuid_generate_v4(),
   current_season_name       text not null default '2025-2026',
   current_season_start_date date not null default '2025-01-01',
+  booking_window_days       integer,
   updated_by                uuid references auth.users(id),
   updated_at                timestamptz not null default now()
 );
@@ -476,6 +480,26 @@ create table public.notifications (
 create index on public.notifications (recipient_id, is_read);
 
 grant select, update on public.notifications to authenticated;
+
+-- ============================================================
+-- PUSH SUBSCRIPTIONS
+-- One row per browser/device a coach has opted into Web Push on. Written
+-- directly by the client; read by the notify-session-change Edge Function
+-- (service role) to actually deliver the push.
+-- ============================================================
+
+create table public.push_subscriptions (
+  id          uuid primary key default uuid_generate_v4(),
+  user_id     uuid references public.profiles(id) not null,
+  endpoint    text not null unique,
+  p256dh      text not null,
+  auth        text not null,
+  created_at  timestamptz not null default now()
+);
+
+create index on public.push_subscriptions (user_id);
+
+grant select, insert, delete on public.push_subscriptions to authenticated;
 
 -- ============================================================
 -- updated_at auto-update trigger
