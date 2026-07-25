@@ -100,8 +100,8 @@ export default function Layout() {
       <aside className="hidden md:flex flex-col w-56 bg-slate-950 text-white fixed left-0 top-0 bottom-0 z-40 shrink-0">
         <div className="px-5 py-5 border-b border-slate-800">
           <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <div className="w-8 h-8 bg-orange-500 rounded-xl flex items-center justify-center shrink-0">
-              <span className="text-white font-black text-xs">CP</span>
+            <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shrink-0 overflow-hidden p-0.5">
+              <img src="/club-logo.jpg" alt="Club logo" className="w-full h-full object-contain rounded-lg" />
             </div>
             <span className="font-bold text-base tracking-tight">CoachPad</span>
           </Link>
@@ -169,8 +169,8 @@ export default function Layout() {
         {/* Mobile Header — hidden on md+ */}
         <header className="md:hidden bg-slate-900 text-white px-4 flex items-center justify-between shrink-0 z-40 shadow-lg" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))', paddingBottom: '12px' }}>
           <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <div className="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-black text-xs">CP</span>
+            <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center overflow-hidden p-0.5">
+              <img src="/club-logo.jpg" alt="Club logo" className="w-full h-full object-contain rounded-md" />
             </div>
             <span className="font-bold text-base tracking-tight">CoachPad</span>
           </Link>
