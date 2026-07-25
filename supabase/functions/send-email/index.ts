@@ -99,6 +99,12 @@ Deno.serve(async (req) => {
 
   await supabase.from('emails').update({ status: 'Sending' }).eq('id', emailId);
 
+  // The sending address itself must stay on the verified Resend domain, but the
+  // display name (and where replies land) can be customised per email.
+  const fromAddressMatch = RESEND_FROM_EMAIL.match(/<(.+)>/);
+  const fromAddress = fromAddressMatch ? fromAddressMatch[1] : RESEND_FROM_EMAIL;
+  const fromHeader = email.from_name ? `${email.from_name} <${fromAddress}>` : RESEND_FROM_EMAIL;
+
   let sentCount = 0;
   let failedCount = 0;
 
@@ -111,10 +117,11 @@ Deno.serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: RESEND_FROM_EMAIL,
+          from: fromHeader,
           to: recipient.recipient_email,
           subject: email.subject,
           text: email.body,
+          ...(email.reply_to ? { reply_to: email.reply_to } : {}),
         }),
       });
       const resJson = await res.json().catch(() => ({}));

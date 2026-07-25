@@ -21,6 +21,9 @@ export default function EmailComposeModal({ audience, targetType, targetIds = []
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [showSender, setShowSender] = useState(false);
+  const [fromName, setFromName] = useState('');
+  const [replyTo, setReplyTo] = useState('');
 
   useEffect(() => {
     const poolPromise = audience === 'members'
@@ -37,9 +40,12 @@ export default function EmailComposeModal({ audience, targetType, targetIds = []
     Promise.all([
       db.entities.EmailTemplate.filter({ audience }, '-created_date', 100).catch(() => []),
       poolPromise,
-    ]).then(([tpls, poolData]) => {
+      db.auth.me().catch(() => null),
+    ]).then(([tpls, poolData, me]) => {
       setTemplates(tpls);
       setPool(poolData);
+      if (me?.full_name) setFromName(me.full_name);
+      if (me?.email) setReplyTo(me.email);
       setLoading(false);
     });
   }, [audience]);
@@ -79,6 +85,8 @@ export default function EmailComposeModal({ audience, targetType, targetIds = []
         target_ids: targetIds,
         recipient_count: reachable.length,
         status: 'Draft',
+        ...(showSender && fromName.trim() ? { from_name: fromName.trim() } : {}),
+        ...(showSender && replyTo.trim() ? { reply_to: replyTo.trim() } : {}),
       });
 
       await Promise.all(reachable.map(r => db.entities.EmailRecipient.create({
@@ -143,6 +151,32 @@ export default function EmailComposeModal({ audience, targetType, targetIds = []
                 <span className="font-bold text-slate-800">{reachable.length}</span> <span className="text-slate-500">recipient{reachable.length !== 1 ? 's' : ''} will receive this</span>
                 {unreachableCount > 0 && (
                   <span className="text-amber-600"> · {unreachableCount} skipped (no email on file)</span>
+                )}
+              </div>
+
+              <div>
+                {!showSender ? (
+                  <button onClick={() => setShowSender(true)} className="text-xs text-blue-600 font-semibold hover:underline">
+                    Send this one as yourself instead of CoachPad →
+                  </button>
+                ) : (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Personalize sender</label>
+                      <button onClick={() => setShowSender(false)} className="text-xs text-slate-400 hover:text-slate-600">Use CoachPad instead</button>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-400 block mb-1">Shown as</label>
+                      <input value={fromName} onChange={e => setFromName(e.target.value)} placeholder="e.g. Isabella - Head Coach" className={IC} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-400 block mb-1">Replies go to</label>
+                      <input value={replyTo} onChange={e => setReplyTo(e.target.value)} type="email" placeholder="you@example.com" className={IC} />
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      The email address it sends from stays the same (that's a Resend/domain requirement) — but recipients see this name, and replying goes straight to you.
+                    </p>
+                  </div>
                 )}
               </div>
 

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, ArrowLeft, Users, Building2, BarChart2, X, Check, Search } from 'lucide-react';
+import { Plus, ArrowLeft, Users, Building2, BarChart2, X, Check, Search, Mail } from 'lucide-react';
 import { db } from '@/api/db';
 import { Spinner } from './shared';
 import { downloadCSV } from '@/lib/csvExport';
 import OptionsMenu from './OptionsMenu';
 import SquadProfile from './SquadProfile';
+import EmailComposeModal from './EmailComposeModal';
 
 const EMPTY_FORM = { name: '', description: '', age_group: '', gender: '', season: '' };
 const IC = 'w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500';
@@ -34,6 +35,7 @@ export default function AdminSquadsTab({ onProfileClick, triggerAdd }) {
   const [selectedBulkSquadIds, setSelectedBulkSquadIds] = useState(new Set());
   const toggleBulkSquad = (id) => setSelectedBulkSquadIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const exitSelectMode = () => { setSelectMode(false); setSelectedBulkSquadIds(new Set()); };
+  const [emailModal, setEmailModal] = useState(null); // { targetType, targetIds, targetLabel } | null
   const [squadAttendance, setSquadAttendance] = useState([]);
   const [squadChallengeResults, setSquadChallengeResults] = useState([]);
 
@@ -360,6 +362,7 @@ export default function AdminSquadsTab({ onProfileClick, triggerAdd }) {
           </span>
           <div className="flex gap-1.5 flex-wrap">
             <button onClick={exitSelectMode} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-xl font-semibold">Cancel</button>
+            <button onClick={() => setEmailModal({ targetType: 'squad', targetIds: [...selectedBulkSquadIds], targetLabel: `${selectedBulkSquadIds.size} squad${selectedBulkSquadIds.size !== 1 ? 's' : ''}` })} disabled={selectedBulkSquadIds.size === 0} className="text-xs bg-white text-slate-900 font-bold hover:bg-slate-100 px-2.5 py-1.5 rounded-xl disabled:opacity-40 flex items-center gap-1"><Mail size={12} /> Email</button>
             <button onClick={() => exportSquadList(squads.filter(s => selectedBulkSquadIds.has(s.id)))} disabled={selectedBulkSquadIds.size === 0} className="text-xs bg-white text-slate-900 font-bold hover:bg-slate-100 px-2.5 py-1.5 rounded-xl disabled:opacity-40">Export CSV</button>
           </div>
         </div>
@@ -392,6 +395,16 @@ export default function AdminSquadsTab({ onProfileClick, triggerAdd }) {
             </div>
           </div>
         </div>
+      )}
+
+      {emailModal && (
+        <EmailComposeModal
+          audience="members"
+          targetType={emailModal.targetType}
+          targetIds={emailModal.targetIds}
+          targetLabel={emailModal.targetLabel}
+          onClose={() => setEmailModal(null)}
+        />
       )}
     </div>
   );

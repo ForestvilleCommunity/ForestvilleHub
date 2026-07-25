@@ -565,6 +565,7 @@ export default function AdminTeamsTab({ onProfileClick, resetTrigger, section: s
                     </span>
                     <div className="flex gap-1.5">
                       <button onClick={exitSelectMode} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-xl font-semibold">Cancel</button>
+                      <button onClick={() => setEmailModal({ targetType: 'team', targetIds: [...selectedBulkTeamIds], targetLabel: `${selectedBulkTeamIds.size} team${selectedBulkTeamIds.size !== 1 ? 's' : ''}` })} disabled={selectedBulkTeamIds.size === 0} className="text-xs bg-white text-slate-900 font-bold hover:bg-slate-100 px-2.5 py-1.5 rounded-xl disabled:opacity-40 flex items-center gap-1"><Mail size={12} /> Email</button>
                       <button onClick={() => exportTeams(teams.filter(t => selectedBulkTeamIds.has(t.id)))} disabled={selectedBulkTeamIds.size === 0} className="text-xs bg-white text-slate-900 font-bold hover:bg-slate-100 px-2.5 py-1.5 rounded-xl disabled:opacity-40">Export CSV</button>
                     </div>
                   </div>
