@@ -2619,6 +2619,11 @@ export default function AdminDevelopmentHubTab({ filterOpen, onFilterClose, rese
   const filteredTeams = useMemo(() => teamsMatchingFiltersExcept(null),
     [teams, squads, filterAgeGroup, filterGender, filterSeason, filterSquad, filterProgramType]);
 
+  // Players list needs the same team-based filters applied — it was
+  // previously reading the raw, unfiltered members array.
+  const filteredTeamIds = useMemo(() => new Set(filteredTeams.map(t => t.id)), [filteredTeams]);
+  const filteredMembers = useMemo(() => members.filter(m => filteredTeamIds.has(m.team_id)), [members, filteredTeamIds]);
+
   if (loading) return (
     <div className="flex-1 flex flex-col">
       <div className="p-12 flex justify-center">
@@ -2819,7 +2824,7 @@ export default function AdminDevelopmentHubTab({ filterOpen, onFilterClose, rese
           {/* Lists */}
           <div className="flex-1 overflow-y-auto">
             {mainTab === 'Teams'        && <TeamsList        teams={filteredTeams} users={users} sessions={sessions} playerEvals={playerEvals} onSelectTeam={setSelectedTeam} search={search} pageSize={devSettings.listPageSize} />}
-            {mainTab === 'Players'      && <PlayersList      members={members}     teams={teams} users={users}       playerEvals={playerEvals} onSelectPlayer={setSelectedPlayer} search={search} ageMethod={devSettings.ageMethod} pageSize={devSettings.listPageSize} />}
+            {mainTab === 'Players'      && <PlayersList      members={filteredMembers} teams={teams} users={users}       playerEvals={playerEvals} onSelectPlayer={setSelectedPlayer} search={search} ageMethod={devSettings.ageMethod} pageSize={devSettings.listPageSize} />}
             {mainTab === 'Coaches'      && <CoachesList      users={users} teams={teams} access={access} coachEvals={coachEvals} onSelectCoach={setSelectedCoach} search={search} />}
           </div>
       </div>
