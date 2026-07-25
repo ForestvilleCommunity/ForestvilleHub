@@ -50,7 +50,9 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 const WATCHED_FIELDS = ['venue_id', 'court_id', 'start_time', 'status'];
 
 Deno.serve(async (req) => {
-  if (WEBHOOK_SECRET && req.headers.get('x-webhook-secret') !== WEBHOOK_SECRET) {
+  // Fail closed: if WEBHOOK_SECRET isn't configured, refuse every request
+  // rather than silently accepting unauthenticated ones.
+  if (!WEBHOOK_SECRET || req.headers.get('x-webhook-secret') !== WEBHOOK_SECRET) {
     return new Response('Unauthorized', { status: 401 });
   }
 

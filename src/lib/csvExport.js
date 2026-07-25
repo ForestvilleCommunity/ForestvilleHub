@@ -3,7 +3,12 @@ export function downloadCSV(rows, filename = 'export.csv') {
   const headers = Object.keys(rows[0]);
   const escape = (v) => {
     if (v === null || v === undefined) return '';
-    const s = String(v);
+    let s = String(v);
+    // Neutralize formula injection: Excel/Sheets treat a leading =+-@ as the
+    // start of a live formula, which can exfiltrate data or run commands
+    // when a member/team export is opened by an admin. A leading tab keeps
+    // the value visually identical but stops it being parsed as a formula.
+    if (/^[=+\-@]/.test(s)) s = '\t' + s;
     return (s.includes(',') || s.includes('"') || s.includes('\n'))
       ? '"' + s.replace(/"/g, '""') + '"'
       : s;

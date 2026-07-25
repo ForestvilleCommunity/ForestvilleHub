@@ -130,7 +130,9 @@ async function dispatchToRecipients(
 }
 
 Deno.serve(async (req) => {
-  if (WEBHOOK_SECRET && req.headers.get('x-webhook-secret') !== WEBHOOK_SECRET) {
+  // Fail closed: if WEBHOOK_SECRET isn't configured, refuse every request
+  // rather than silently accepting unauthenticated ones.
+  if (!WEBHOOK_SECRET || req.headers.get('x-webhook-secret') !== WEBHOOK_SECRET) {
     return new Response('Unauthorized', { status: 401 });
   }
 

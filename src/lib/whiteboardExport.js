@@ -109,6 +109,19 @@ function renderAction(action) {
   return `${arrow}<path d="${d}" fill="none" stroke="${color}" stroke-width="${width}" ${dashAttr} stroke-linecap="round" stroke-linejoin="round" ${markerEnd}/>${screenBar}`;
 }
 
+// player.label is free text a coach can type on the whiteboard — it lands
+// inside SVG text content that later gets injected, unescaped, into an
+// exported HTML page (see exportHTML.js). Without escaping, a label like
+// `</text><script>...` breaks out of the text node and executes.
+function escXml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderPlayer(player) {
   const isOff = ['1','2','3','4','5'].includes(player.type);
   const isDef = ['X1','X2','X3','X4','X5'].includes(player.type);
@@ -118,7 +131,7 @@ function renderPlayer(player) {
   const r = player.type === 'cone' ? 10 : 16;
   const fontSize = (player.label || '').length > 2 ? 8 : 10;
   return `<circle cx="${player.x}" cy="${player.y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
-    <text x="${player.x}" y="${player.y}" text-anchor="middle" dominant-baseline="central" fill="${textColor}" font-size="${fontSize}" font-weight="bold" font-family="Arial,sans-serif">${player.label || ''}</text>`;
+    <text x="${player.x}" y="${player.y}" text-anchor="middle" dominant-baseline="central" fill="${textColor}" font-size="${fontSize}" font-weight="bold" font-family="Arial,sans-serif">${escXml(player.label)}</text>`;
 }
 
 /**

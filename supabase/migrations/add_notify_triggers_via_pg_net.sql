@@ -7,6 +7,13 @@
 --
 -- Replace <ANON_KEY> below with your VITE_SUPABASE_ANON_KEY value (same one
 -- already in your .env — it's meant to be public, safe to use here).
+--
+-- Replace <WEBHOOK_SECRET> with the SAME value set as the WEBHOOK_SECRET
+-- secret on both notify-session-change and notify-schedule-change. This one
+-- is NOT safe to commit — it's what stops anyone from POSTing fake payloads
+-- straight to those functions to spam real coaches with fake notifications/
+-- emails. Keep the real value out of version control; paste it only when
+-- running this in the SQL Editor.
 
 create extension if not exists pg_net with schema extensions;
 
@@ -36,8 +43,8 @@ begin
     url := fn_url,
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer sb_publishable_NiktBLY8VBtpqEu-qVWU2g_HNu4oxLZ',
-      'x-webhook-secret', 'cp_wh_8f3a1e2b9c6d4f7a0e5b2c8d1a9f6e3b'
+      'Authorization', 'Bearer <ANON_KEY>',
+      'x-webhook-secret', '<WEBHOOK_SECRET>'
     ),
     body := payload
   );

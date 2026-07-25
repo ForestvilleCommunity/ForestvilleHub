@@ -53,9 +53,17 @@ ${bodyHTML}
   win.document.close();
 }
 
+// Escapes for both HTML text content AND "double-quoted" attribute values —
+// quotes must be escaped too, or a value like a coach-entered video_url
+// containing a `"` can break out of `href="${esc(...)}"` and inject markup.
 function esc(str) {
   if (!str) return '';
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // ─── DRILL EXPORT ─────────────────────────────────────────────────────────────
