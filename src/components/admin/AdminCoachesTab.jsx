@@ -12,8 +12,9 @@ import { downloadCSV } from '@/lib/csvExport';
 import CoachProfile from './CoachProfile';
 import CreateCoachPanel from './CreateCoachPanel';
 import CustomExportModal from './CustomExportModal';
+import EmailComposeModal from './EmailComposeModal';
 
-export default function AdminCoachesTab({ onProfileClick, resetTrigger, triggerAdd, triggerExport, triggerSettings }) {
+export default function AdminCoachesTab({ onProfileClick, resetTrigger, triggerAdd, triggerExport, triggerSettings, triggerEmail }) {
   const [showForm, setShowForm] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -33,6 +34,7 @@ export default function AdminCoachesTab({ onProfileClick, resetTrigger, triggerA
   const [filterTeam, setFilterTeam] = useState('');
   const [coachSearch, setCoachSearch] = useState('');
   const [selectedCoachIds, setSelectedCoachIds] = useState(new Set());
+  const [emailModal, setEmailModal] = useState(null); // { targetType, targetIds, targetLabel } | null
   const PAGE_SIZE = settings.perPage;
   const [page, setPage] = useState(0);
   useEffect(() => { setPage(0); }, [coachSearch, settings.perPage]);
@@ -44,6 +46,7 @@ export default function AdminCoachesTab({ onProfileClick, resetTrigger, triggerA
   useEffect(() => { if (!triggerAdd) return; setShowForm(true); }, [triggerAdd]);
   useEffect(() => { if (!triggerExport) return; setShowExport(true); }, [triggerExport]);
   useEffect(() => { if (!triggerSettings) return; setSelectedCoach(null); setDraftSettings(loadCoachesSettings()); setShowSettings(true); }, [triggerSettings]);
+  useEffect(() => { if (!triggerEmail) return; setEmailModal({ targetType: 'all', targetIds: [], targetLabel: 'All Coaches' }); }, [triggerEmail]);
   useEffect(() => { load(); }, []);
 
   const load = async () => {
@@ -204,7 +207,7 @@ export default function AdminCoachesTab({ onProfileClick, resetTrigger, triggerA
                     { label: 'Assign team', action: () => { setAssignModal(user); } },
                     { label: suspended ? 'Activate coach' : 'Suspend coach', action: () => toggleSuspend(user), danger: !suspended },
                     { divider: true },
-                    { label: 'Email coach', disabled: true },
+                    { label: 'Email coach', action: () => setEmailModal({ targetType: 'individual', targetIds: [user.id], targetLabel: user.full_name || user.email }) },
                     { label: 'Coach history', disabled: true },
                     { label: 'Reports', disabled: true },
                   ]} />
@@ -227,10 +230,7 @@ export default function AdminCoachesTab({ onProfileClick, resetTrigger, triggerA
           <div className="flex gap-2">
             <button onClick={exitSelectMode} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-xl font-semibold">Cancel</button>
             <button
-              onClick={() => {
-                const emails = users.filter(u => selectedCoachIds.has(u.id) && u.email).map(u => u.email).join(',');
-                if (emails) window.open(`mailto:${emails}`);
-              }}
+              onClick={() => setEmailModal({ targetType: 'individual', targetIds: [...selectedCoachIds], targetLabel: `${selectedCoachIds.size} Coach${selectedCoachIds.size !== 1 ? 'es' : ''}` })}
               disabled={selectedCoachIds.size === 0}
               className="text-xs bg-white text-slate-900 font-bold hover:bg-slate-100 px-2.5 py-1.5 rounded-xl disabled:opacity-40">Email</button>
             <button onClick={() => exportCoaches(users.filter(u => selectedCoachIds.has(u.id)))} disabled={selectedCoachIds.size === 0} className="text-xs bg-white/20 hover:bg-white/30 px-2.5 py-1.5 rounded-xl font-semibold disabled:opacity-40">Export CSV</button>
@@ -417,6 +417,16 @@ export default function AdminCoachesTab({ onProfileClick, resetTrigger, triggerA
             </div>
           </div>
         </div>
+      )}
+
+      {emailModal && (
+        <EmailComposeModal
+          audience="coaches"
+          targetType={emailModal.targetType}
+          targetIds={emailModal.targetIds}
+          targetLabel={emailModal.targetLabel}
+          onClose={() => setEmailModal(null)}
+        />
       )}
     </div>
   );

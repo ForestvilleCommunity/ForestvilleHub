@@ -53,6 +53,31 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+const WEEKDAY_INDEX = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 };
+
+// The next real calendar date (today included) matching a recurring slot's weekday —
+// e.g. "Wednesday" -> the coming Wednesday's actual date, for one-off "just this one" actions.
+function nextOccurrenceDate(dayName) {
+  const targetIdx = WEEKDAY_INDEX[dayName];
+  if (targetIdx == null) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    if (d.getDay() === targetIdx) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+  }
+  return null;
+}
+
+function fmtDateNice(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(`${dateStr}T00:00:00`);
+  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+}
+
 function isPaused(alloc) {
   if (!alloc.pause_start || !alloc.pause_end) return false;
   const t = todayStr();
@@ -452,9 +477,37 @@ function SlotDetail({ alloc, info, venueEntities, courts, onClose, onProfileClic
   const [deleteNote, setDeleteNote] = useState('');
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [skipNote, setSkipNote] = useState('');
+  const [skipping, setSkipping] = useState(false);
 
   const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const filteredCourts = courts.filter(c => !form.venue_id || c.venue_id === form.venue_id);
+
+  const nextDate = nextOccurrenceDate(alloc.day);
+  const alreadySkippingNext = !!(alloc.pause_start && alloc.pause_end && nextDate >= alloc.pause_start && nextDate <= alloc.pause_end);
+
+  const confirmSkip = async () => {
+    setSkipping(true);
+    setError('');
+    try {
+      await onSave(alloc.id, {
+        day: alloc.day,
+        start_time: alloc.start_time || '',
+        end_time: alloc.end_time || '',
+        venue_id: alloc.venue_id || '',
+        court_id: alloc.court_id || '',
+        pause_start: nextDate,
+        pause_end: nextDate,
+        pending_note: skipNote.trim() || null,
+      });
+      setShowSkipConfirm(false);
+    } catch (e) {
+      setError(e.message || 'Failed to skip. Please try again.');
+    } finally {
+      setSkipping(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -609,6 +662,31 @@ function SlotDetail({ alloc, info, venueEntities, courts, onClose, onProfileClic
             className={`w-full py-3.5 ${info.color.bg} text-white rounded-2xl text-sm font-bold hover:opacity-90 transition-opacity`}>
             View {info.isSquad ? 'Squad' : 'Team'} Profile →
           </button>
+
+          {nextDate && !alreadySkippingNext && !showSkipConfirm && (
+            <button onClick={() => setShowSkipConfirm(true)}
+              className="w-full py-3 border border-amber-200 bg-amber-50 rounded-2xl text-sm font-bold text-amber-700 hover:bg-amber-100 flex items-center justify-center gap-1.5">
+              <Pause size={14}/> Skip just {fmtDateNice(nextDate)}
+            </button>
+          )}
+          {showSkipConfirm && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-2">
+              <p className="text-xs font-bold text-amber-800">
+                Skips only {fmtDateNice(nextDate)} — every other week keeps running as normal, at the same day/time/venue.
+              </p>
+              <textarea value={skipNote} onChange={e => setSkipNote(e.target.value)} rows={2}
+                placeholder="e.g. Venue unavailable this week (optional)"
+                className="w-full border border-amber-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white resize-none" />
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <div className="flex gap-2">
+                <button onClick={() => { setShowSkipConfirm(false); setError(''); }} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600">Cancel</button>
+                <button onClick={confirmSkip} disabled={skipping} className="flex-1 py-2.5 bg-amber-600 text-white rounded-xl text-sm font-bold hover:bg-amber-700 disabled:opacity-50">
+                  {skipping ? 'Skipping…' : `Skip ${fmtDateNice(nextDate)}`}
+                </button>
+              </div>
+            </div>
+          )}
+
           {confirmDelete && (
             <div className="bg-red-50 border border-red-200 rounded-2xl p-3 space-y-2">
               <label className="text-xs font-bold text-red-700 uppercase tracking-wider block mb-1.5">Message to coaches (optional)</label>

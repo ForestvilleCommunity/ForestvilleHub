@@ -203,6 +203,9 @@ export default function AdminDashboard() {
   const [triggerMembersSettings, setTriggerMembersSettings] = useState(0);
   const [triggerCoachesSettings, setTriggerCoachesSettings] = useState(0);
   const [triggerMembersStats, setTriggerMembersStats] = useState(0);
+  const [triggerTeamsEmail, setTriggerTeamsEmail] = useState(0);
+  const [triggerMembersEmail, setTriggerMembersEmail] = useState(0);
+  const [triggerCoachesEmail, setTriggerCoachesEmail] = useState(0);
   const [trainingSubTab, setTrainingSubTab] = useState('overview');
   const [triggerAddVenue, setTriggerAddVenue] = useState(0);
   const [triggerAddTraining, setTriggerAddTraining] = useState(0);
@@ -292,8 +295,8 @@ export default function AdminDashboard() {
         <button onClick={() => setTriggerTeamsExport(c => c + 1)} className={subItem(false)}>
           <Download size={15} /> Export
         </button>
-        <button disabled className={subItemSoon}>
-          <Mail size={15} /> Email <span className="ml-auto text-[10px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">Soon</span>
+        <button onClick={() => setTriggerTeamsEmail(c => c + 1)} className={subItem(false)}>
+          <Mail size={15} /> Email
         </button>
         <button onClick={() => setTriggerTeamsSettings(c => c + 1)} className={subItem(false)}>
           <Settings2 size={15} /> Settings
@@ -314,8 +317,8 @@ export default function AdminDashboard() {
         <button onClick={() => setTriggerMembersStats(c => c + 1)} className={subItem(false)}>
           <BarChart2 size={15} /> Statistics
         </button>
-        <button disabled className={subItemSoon}>
-          <Mail size={15} /> Email <span className="ml-auto text-[10px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">Soon</span>
+        <button onClick={() => setTriggerMembersEmail(c => c + 1)} className={subItem(false)}>
+          <Mail size={15} /> Email
         </button>
         <button onClick={() => setTriggerMembersSettings(c => c + 1)} className={subItem(false)}>
           <Settings2 size={15} /> Settings
@@ -377,8 +380,8 @@ export default function AdminDashboard() {
         <button onClick={() => setTriggerCoachesExport(c => c + 1)} className={subItem(false)}>
           <Download size={15} /> Export
         </button>
-        <button disabled className={subItemSoon}>
-          <Mail size={15} /> Email <span className="ml-auto text-[10px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">Soon</span>
+        <button onClick={() => setTriggerCoachesEmail(c => c + 1)} className={subItem(false)}>
+          <Mail size={15} /> Email
         </button>
         <button onClick={() => setTriggerCoachesSettings(c => c + 1)} className={subItem(false)}>
           <Settings2 size={15} /> Settings
@@ -526,9 +529,9 @@ export default function AdminDashboard() {
         {/* Tab content — all tabs stay mounted to avoid re-fetching on tab switch */}
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
           <div className={activeTab === 'overview'     ? 'contents' : 'hidden'}><ErrorBoundary><AdminOverviewTab    resetTrigger={resetCounters.overview} onTabChange={setActiveTab} /></ErrorBoundary></div>
-          <div className={activeTab === 'members'      ? 'contents' : 'hidden'}><ErrorBoundary><AdminMembersTab     onProfileClick={pushProfile} filterOpen={adminFilterOpen} onFilterClose={() => setAdminFilterOpen(false)} resetTrigger={resetCounters.members} triggerAdd={triggerMembersAdd} triggerImport={triggerMembersImport} triggerExport={triggerMembersExport} triggerSettings={triggerMembersSettings} triggerStats={triggerMembersStats} /></ErrorBoundary></div>
-          <div className={activeTab === 'teams'        ? 'contents' : 'hidden'}><ErrorBoundary><AdminTeamsTab       onProfileClick={pushProfile} resetTrigger={resetCounters.teams} section={teamsSection} onSectionChange={setTeamsSection} triggerAdd={triggerTeamsAdd} triggerAddSquad={triggerTeamsAddSquad} triggerExport={triggerTeamsExport} triggerSettings={triggerTeamsSettings} /></ErrorBoundary></div>
-          <div className={activeTab === 'coaches'      ? 'contents' : 'hidden'}><ErrorBoundary><AdminCoachesTab     onProfileClick={pushProfile} resetTrigger={resetCounters.coaches} triggerAdd={triggerCoachesAdd} triggerExport={triggerCoachesExport} triggerSettings={triggerCoachesSettings} /></ErrorBoundary></div>
+          <div className={activeTab === 'members'      ? 'contents' : 'hidden'}><ErrorBoundary><AdminMembersTab     onProfileClick={pushProfile} filterOpen={adminFilterOpen} onFilterClose={() => setAdminFilterOpen(false)} resetTrigger={resetCounters.members} triggerAdd={triggerMembersAdd} triggerImport={triggerMembersImport} triggerExport={triggerMembersExport} triggerSettings={triggerMembersSettings} triggerStats={triggerMembersStats} triggerEmail={triggerMembersEmail} /></ErrorBoundary></div>
+          <div className={activeTab === 'teams'        ? 'contents' : 'hidden'}><ErrorBoundary><AdminTeamsTab       onProfileClick={pushProfile} resetTrigger={resetCounters.teams} section={teamsSection} onSectionChange={setTeamsSection} triggerAdd={triggerTeamsAdd} triggerAddSquad={triggerTeamsAddSquad} triggerExport={triggerTeamsExport} triggerSettings={triggerTeamsSettings} triggerEmail={triggerTeamsEmail} /></ErrorBoundary></div>
+          <div className={activeTab === 'coaches'      ? 'contents' : 'hidden'}><ErrorBoundary><AdminCoachesTab     onProfileClick={pushProfile} resetTrigger={resetCounters.coaches} triggerAdd={triggerCoachesAdd} triggerExport={triggerCoachesExport} triggerSettings={triggerCoachesSettings} triggerEmail={triggerCoachesEmail} /></ErrorBoundary></div>
           <div className={activeTab === 'training'     ? 'contents' : 'hidden'}><ErrorBoundary><AdminTrainingTab    onProfileClick={pushProfile} resetTrigger={resetCounters.training} subTab={trainingSubTab} onSubTabChange={setTrainingSubTab} triggerAddVenue={triggerAddVenue} triggerAddTraining={triggerAddTraining} triggerSettings={triggerTrainingSettings} /></ErrorBoundary></div>
           <div className={activeTab === 'development'  ? 'contents' : 'hidden'}><ErrorBoundary><AdminDevelopmentHubTab filterOpen={adminFilterOpen} onFilterClose={() => setAdminFilterOpen(false)} resetTrigger={resetCounters.development} triggerSettings={triggerDevSettings} /></ErrorBoundary></div>
           <div className={activeTab === 'library'      ? 'contents' : 'hidden'}><AdminDrillsTab      resetTrigger={resetCounters.library} triggerAdd={triggerAddDrill} triggerExport={triggerExportDrills} triggerImport={triggerImportDrills} triggerSettings={triggerLibrarySettings} /></div>

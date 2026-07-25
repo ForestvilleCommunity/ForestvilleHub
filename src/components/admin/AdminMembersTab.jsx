@@ -12,6 +12,7 @@ import MemberProfile from './MemberProfile';
 import MemberEditScreen from './MemberEditScreen';
 import JerseyConflictReport from './JerseyConflictReport';
 import JerseyMatrix from './JerseyMatrix';
+import EmailComposeModal from './EmailComposeModal';
 import { getCurrentSeason } from '@/lib/season.js';
 
 const MEMBERS_SETTINGS_KEY = 'coachpad_members_settings';
@@ -54,7 +55,7 @@ const EMPTY = {
   medication:'', other_conditions:'', notes:'', status:'Active', visibility:'Club',
 };
 
-export default function AdminMembersTab({ onProfileClick, filterOpen, onFilterClose, resetTrigger, triggerAdd, triggerImport, triggerExport, triggerSettings, triggerStats }) {
+export default function AdminMembersTab({ onProfileClick, filterOpen, onFilterClose, resetTrigger, triggerAdd, triggerImport, triggerExport, triggerSettings, triggerStats, triggerEmail }) {
   const [showForm, setShowForm] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [members, setMembers] = useState([]);
@@ -95,6 +96,7 @@ export default function AdminMembersTab({ onProfileClick, filterOpen, onFilterCl
   const [showReport, setShowReport] = useState(null);
   const [showConflicts, setShowConflicts] = useState(false);
   const [jerseyTab, setJerseyTab] = useState('conflicts'); // 'conflicts' | 'matrix'
+  const [emailModal, setEmailModal] = useState(null); // { targetType, targetIds, targetLabel } | null
 
   const [showFilters, setShowFilters] = useState(false);
   useEffect(() => { if (filterOpen) setShowFilters(true); }, [filterOpen]);
@@ -113,6 +115,7 @@ export default function AdminMembersTab({ onProfileClick, filterOpen, onFilterCl
   }, [triggerExport]);
   useEffect(() => { if (!triggerStats) return; setShowStats(true); }, [triggerStats]);
   useEffect(() => { if (!triggerSettings) return; setSelectedMember(null); setDraftSettings(loadMembersSettings()); try { setDraftAgeMethod(JSON.parse(localStorage.getItem('coachpad_devhub_settings') || '{}').ageMethod || 'dec31'); } catch {} setShowSettings(true); }, [triggerSettings]);
+  useEffect(() => { if (!triggerEmail) return; setEmailModal({ targetType: 'all', targetIds: [], targetLabel: 'All Members' }); }, [triggerEmail]);
 
   useEffect(() => { load(); }, []);
 
@@ -708,7 +711,7 @@ export default function AdminMembersTab({ onProfileClick, filterOpen, onFilterCl
                       { label: 'Edit member', action: () => openEdit(m) },
                       { label: archived ? 'Restore member' : 'Archive member', action: () => setMemberStatus(m, archived ? 'Active' : 'Archived') },
                       { divider: true },
-                      { label: 'Email member', disabled: true },
+                      { label: 'Email member', action: () => setEmailModal({ targetType: 'individual', targetIds: [m.id], targetLabel: m.name }) },
                       { label: 'Invoice member', disabled: true },
                       { label: 'Notes & documents', disabled: true },
                       { label: 'Member history', disabled: true },
@@ -733,10 +736,7 @@ export default function AdminMembersTab({ onProfileClick, filterOpen, onFilterCl
           <div className="flex gap-2">
             <button onClick={exitSelectMode} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-xl font-semibold">Cancel</button>
             <button
-              onClick={() => {
-                const emails = members.filter(m => selectedMemberIds.has(m.id) && m.email).map(m => m.email).join(',');
-                if (emails) window.open(`mailto:${emails}`);
-              }}
+              onClick={() => setEmailModal({ targetType: 'individual', targetIds: [...selectedMemberIds], targetLabel: `${selectedMemberIds.size} Member${selectedMemberIds.size !== 1 ? 's' : ''}` })}
               disabled={selectedMemberIds.size === 0}
               className="text-xs bg-white text-slate-900 font-bold hover:bg-slate-100 px-2.5 py-1.5 rounded-xl disabled:opacity-40">Email</button>
             <button
@@ -1124,6 +1124,16 @@ export default function AdminMembersTab({ onProfileClick, filterOpen, onFilterCl
             </button>
           </div>
         </div>
+      )}
+
+      {emailModal && (
+        <EmailComposeModal
+          audience="members"
+          targetType={emailModal.targetType}
+          targetIds={emailModal.targetIds}
+          targetLabel={emailModal.targetLabel}
+          onClose={() => setEmailModal(null)}
+        />
       )}
     </div>
   );

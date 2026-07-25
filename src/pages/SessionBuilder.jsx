@@ -110,7 +110,10 @@ export default function SessionBuilder() {
 
   const handleLeave = () => {
     if (isDirty() && !window.confirm('You have unsaved changes to this session. Leave without saving?')) return;
-    navigate('/sessions');
+    // Go back to wherever the coach actually came from (Sessions list, Schedule's
+    // "Plan Session", etc.) instead of always landing on the generic Sessions list.
+    if (window.history.state?.idx > 0) navigate(-1);
+    else navigate('/sessions');
   };
 
   const loadSession = async () => {

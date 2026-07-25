@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Clock, Navigation, ChevronRight } from 'lucide-react';
 import { db } from '@/api/db';
-import { getAccessibleTeams } from '@/lib/teamAccess';
 
 const todayStr = () => {
   const d = new Date();
@@ -38,43 +37,33 @@ function directionsUrl(venue) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
-export default function NextSessionCard() {
+export default function NextSessionCard({ team }) {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState(null);
-  const [teams, setTeams] = useState([]);
   const [venuesById, setVenuesById] = useState({});
   const [courtsById, setCourtsById] = useState({});
 
   useEffect(() => {
+    if (!team?.id) { setSessions([]); return; }
     const load = async () => {
-      const user = await db.auth.me().catch(() => null);
-      if (!user) return;
-      const accessibleTeams = await getAccessibleTeams(user);
-      const teamIds = accessibleTeams.map(t => t.id);
-
-      const [teamSessions, ownSessions, venueList, courtList] = await Promise.all([
-        teamIds.length ? db.entities.Session.filter({ team_id: teamIds }).catch(() => []) : Promise.resolve([]),
-        db.entities.Session.filter({ owner_id: user.id }).catch(() => []),
+      const [teamSessions, venueList, courtList] = await Promise.all([
+        db.entities.Session.filter({ team_id: team.id }).catch(() => []),
         db.entities.Venue.list().catch(() => []),
         db.entities.Court.list().catch(() => []),
       ]);
 
-      const merged = new Map();
-      [...teamSessions, ...ownSessions].forEach(s => merged.set(s.id, s));
-
       const today = todayStr();
-      const upcoming = Array.from(merged.values())
+      const upcoming = teamSessions
         .filter(s => s.date >= today && s.status !== 'Cancelled')
         .sort((a, b) => (a.date === b.date ? (a.start_time || '').localeCompare(b.start_time || '') : a.date.localeCompare(b.date)));
 
       const nextDate = upcoming[0]?.date;
       setSessions(nextDate ? upcoming.filter(s => s.date === nextDate) : []);
-      setTeams(accessibleTeams);
       setVenuesById(Object.fromEntries(venueList.map(v => [v.id, v])));
       setCourtsById(Object.fromEntries(courtList.map(c => [c.id, c])));
     };
     load().catch(() => setSessions([]));
-  }, []);
+  }, [team?.id]);
 
   if (!sessions || sessions.length === 0) return null;
   const isToday = sessions[0].date === todayStr();
@@ -87,7 +76,6 @@ export default function NextSessionCard() {
       </div>
       <div className="space-y-2">
         {sessions.map(s => {
-          const team = teams.find(t => t.id === s.team_id);
           const venue = venuesById[s.venue_id];
           const court = courtsById[s.court_id];
           const dirUrl = directionsUrl(venue);
@@ -101,7 +89,7 @@ export default function NextSessionCard() {
                   <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{fmtDateLabel(s.date)}</span>
                   {timeLabel && <span className="text-xs text-slate-500 font-semibold flex items-center gap-1"><Clock size={10} />{timeLabel}</span>}
                 </div>
-                <p className="font-semibold text-sm text-slate-900 mt-1 truncate">{s.session_name}{team ? ` · ${team.team_name}` : ''}</p>
+                <p className="font-semibold text-sm text-slate-900 mt-1 truncate">{s.session_name}</p>
                 {(venue || court) ? (
                   <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
                     <MapPin size={10} className="shrink-0" />

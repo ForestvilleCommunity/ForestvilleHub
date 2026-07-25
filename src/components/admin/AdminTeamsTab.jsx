@@ -3,6 +3,7 @@ import { Plus, Users, X, Check, Search, SlidersHorizontal, MoreHorizontal, FileD
 import Pagination from './Pagination';
 import { db } from '@/api/db';
 import { INPUT, PlaceholderTab, Spinner, Field } from './shared';
+import EmailComposeModal from './EmailComposeModal';
 import { downloadCSV } from '@/lib/csvExport';
 import OptionsMenu from './OptionsMenu';
 import CustomReportModal from './CustomReportModal';
@@ -35,7 +36,7 @@ const DEVHUB_SETTINGS_KEY_REF = 'coachpad_devhub_settings';
 function loadAgeMethod() { try { return JSON.parse(localStorage.getItem(DEVHUB_SETTINGS_KEY_REF) || '{}').ageMethod || 'dec31'; } catch { return 'dec31'; } }
 function saveAgeMethod(v) { try { const s = JSON.parse(localStorage.getItem(DEVHUB_SETTINGS_KEY_REF) || '{}'); localStorage.setItem(DEVHUB_SETTINGS_KEY_REF, JSON.stringify({ ...s, ageMethod: v })); } catch {} }
 
-export default function AdminTeamsTab({ onProfileClick, resetTrigger, section: sectionProp, onSectionChange, triggerAdd, triggerAddSquad, triggerExport, triggerSettings }) {
+export default function AdminTeamsTab({ onProfileClick, resetTrigger, section: sectionProp, onSectionChange, triggerAdd, triggerAddSquad, triggerExport, triggerSettings, triggerEmail }) {
   const [localSection, setLocalSection] = useState('Teams');
   const section = sectionProp ?? localSection;
   const setSection = onSectionChange ?? setLocalSection;
@@ -75,6 +76,7 @@ export default function AdminTeamsTab({ onProfileClick, resetTrigger, section: s
   const [filterGender, setFilterGender] = useState('');
   const [filterSquadId, setFilterSquadId] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [emailModal, setEmailModal] = useState(null); // { targetType, targetIds, targetLabel } | null
   const PAGE_SIZE = settings.perPage;
   const [teamsPage, setTeamsPage] = useState(0);
   useEffect(() => { setTeamsPage(0); }, [teamSearch, filterAgeGroup, filterGender, filterSquadId, showArchived, settings.perPage]);
@@ -85,6 +87,7 @@ export default function AdminTeamsTab({ onProfileClick, resetTrigger, section: s
   useEffect(() => { if (!triggerAddSquad) return; setSection('Squads'); setTriggerSquadAdd(c => c + 1); }, [triggerAddSquad]);
   useEffect(() => { if (!triggerExport) return; setShowExport(true); }, [triggerExport]);
   useEffect(() => { if (!triggerSettings) return; setSelectedTeam(null); setDraftSettings(loadTeamsSettings()); setDraftAgeMethod(loadAgeMethod()); setShowSettings(true); }, [triggerSettings]);
+  useEffect(() => { if (!triggerEmail) return; setEmailModal({ targetType: 'all', targetIds: [], targetLabel: 'All Members' }); }, [triggerEmail]);
   useEffect(() => { load(); }, []);
 
   const load = async () => {
@@ -472,8 +475,9 @@ export default function AdminTeamsTab({ onProfileClick, resetTrigger, section: s
                                 ⚡ Auto-assign team genders
                               </button>
                             )}
-                            <button disabled className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-400 flex items-center gap-2">
-                              <Mail size={13} className="shrink-0" /> Email <span className="ml-auto text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">Soon</span>
+                            <button onClick={() => { setEmailModal({ targetType: 'all', targetIds: [], targetLabel: 'All Members' }); setShowMoreMenu(false); }}
+                              className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                              <Mail size={13} className="shrink-0" /> Email
                             </button>
                             <button onClick={() => { setDraftSettings(loadTeamsSettings()); setShowSettings(true); setShowMoreMenu(false); }}
                               className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2">
@@ -539,6 +543,7 @@ export default function AdminTeamsTab({ onProfileClick, resetTrigger, section: s
                           <OptionsMenu items={[
                             { label: 'Edit team', action: () => openTeamEdit(team) },
                             { label: 'Assign coach', action: () => setAssignCoachModal(team) },
+                            { label: 'Email team', action: () => setEmailModal({ targetType: 'team', targetIds: [team.id], targetLabel: team.team_name }) },
                             { divider: true },
                             isArchived
                               ? { label: 'Unarchive team', action: () => unarchiveTeam(team) }
@@ -835,6 +840,16 @@ export default function AdminTeamsTab({ onProfileClick, resetTrigger, section: s
             </button>
           </div>
         </div>
+      )}
+
+      {emailModal && (
+        <EmailComposeModal
+          audience="members"
+          targetType={emailModal.targetType}
+          targetIds={emailModal.targetIds}
+          targetLabel={emailModal.targetLabel}
+          onClose={() => setEmailModal(null)}
+        />
       )}
     </div>
   );

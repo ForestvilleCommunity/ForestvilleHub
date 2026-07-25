@@ -176,7 +176,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <NextSessionCard />
+      <NextSessionCard team={activeTeam} />
 
       {/* Primary CTAs */}
       <div className="space-y-3">

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LayoutDashboard, Users, Dumbbell, CalendarCheck, CalendarClock, LogOut, BarChart2, UserCircle, Trash2, ShieldAlert, Shield } from 'lucide-react';
+import { Home as HomeIcon, Users, Dumbbell, ClipboardList, CalendarClock, LogOut, BarChart2, UserCircle, Trash2, ShieldAlert, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import HelpDrawer from './HelpDrawer';
 import { db } from '@/api/db';
@@ -10,11 +10,11 @@ import NotificationBell from './NotificationBell';
 import { clearActiveTeam, initActiveTeamForUser } from '@/lib/activeTeam';
 
 const navItems = [
-  { path: '/', label: 'Home', icon: LayoutDashboard },
+  { path: '/', label: 'Home', icon: HomeIcon },
   { path: '/players', label: 'Players', icon: Users },
-  { path: '/sessions', label: 'Sessions', icon: CalendarCheck },
+  { path: '/schedule', label: 'Calendar', icon: CalendarClock },
   { path: '/drills', label: 'Drills', icon: Dumbbell },
-  { path: '/schedule', label: 'Schedule', icon: CalendarClock },
+  { path: '/sessions', label: 'Sessions', icon: ClipboardList },
   { path: '/stats', label: 'Stats', icon: BarChart2 },
 ];
 
