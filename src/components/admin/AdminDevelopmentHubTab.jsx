@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, TrendingUp, TrendingDown, Minus, Plus, Search, SlidersHorizontal, Pencil, Trash2, ChevronDown, ChevronUp, Check, X, Eye, MessageSquare, Trophy, UserCircle } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, Plus, Search, SlidersHorizontal, Pencil, Trash2, ChevronDown, ChevronUp, Check, X, Eye, MessageSquare, Trophy, UserCircle, ArrowUpDown } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { db } from '@/api/db';
@@ -1659,10 +1659,25 @@ function LoadMore({ shown, total, onMore }) {
     </button>
   );
 }
-function TeamsList({ teams, users, sessions, playerEvals, onSelectTeam, search, pageSize = 25 }) {
+function TeamsList({ teams, users, sessions, playerEvals, onSelectTeam, search, sortBy = 'name', pageSize = 25 }) {
   const [page, setPage] = useState(0);
-  useEffect(() => { setPage(0); }, [search, teams]);
-  const filtered = teams.filter(t => !search || (t.team_name || '').toLowerCase().includes(search.toLowerCase()));
+  useEffect(() => { setPage(0); }, [search, teams, sortBy]);
+  const withScores = teams
+    .filter(t => !search || (t.team_name || '').toLowerCase().includes(search.toLowerCase()))
+    .map(t => {
+      const ts   = sessions.filter(s => s.team_id === t.id);
+      const vals = ts.map(s => sessionRating(s)).filter(v => v != null);
+      const avg  = vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null;
+      return { team: t, ts, avg };
+    });
+  const filtered = sortBy === 'name' ? withScores
+    : [...withScores].sort((a, b) => {
+        // Unrated teams always sink to the bottom regardless of direction.
+        if (a.avg === null && b.avg === null) return 0;
+        if (a.avg === null) return 1;
+        if (b.avg === null) return -1;
+        return sortBy === 'scoreDesc' ? b.avg - a.avg : a.avg - b.avg;
+      });
   if (filtered.length === 0) return (
     <div className="p-4">
       <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400 text-sm">
@@ -1672,11 +1687,8 @@ function TeamsList({ teams, users, sessions, playerEvals, onSelectTeam, search, 
   );
   return (
     <div className="p-4 space-y-2 w-full min-w-0">
-      {filtered.slice(page * pageSize, (page + 1) * pageSize).map(t => {
-        const ts     = sessions.filter(s => s.team_id === t.id);
+      {filtered.slice(page * pageSize, (page + 1) * pageSize).map(({ team: t, ts, avg }) => {
         const latest = ts.length ? [...ts].sort((a, b) => new Date(b.observation_date) - new Date(a.observation_date))[0] : null;
-        const vals   = ts.map(s => sessionRating(s)).filter(v => v != null);
-        const avg    = vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null;
         const trend  = calcTrend(ts, 'overall_rating');
         const coach  = users.find(u => u.email === t.owner_user_email);
         return (
@@ -2169,10 +2181,23 @@ function PlayerHistory({ member, teams, users, sessions, playerEvals, onBack, on
 
 // â"€â"€ Players List â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-function PlayersList({ members, teams, users, playerEvals, onSelectPlayer, search, ageMethod = 'dec31', pageSize = 25 }) {
+function PlayersList({ members, teams, users, playerEvals, onSelectPlayer, search, sortBy = 'name', ageMethod = 'dec31', pageSize = 25 }) {
   const [page, setPage] = useState(0);
-  useEffect(() => { setPage(0); }, [search, members]);
-  const filtered = members.filter(m => !search || (m.name || '').toLowerCase().includes(search.toLowerCase()));
+  useEffect(() => { setPage(0); }, [search, members, sortBy]);
+  const withScores = members
+    .filter(m => !search || (m.name || '').toLowerCase().includes(search.toLowerCase()))
+    .map(m => {
+      const evals = playerEvals.filter(e => e.player_id === m.id);
+      return { member: m, evals, avg: avgOfField(evals, 'rating') };
+    });
+  const filtered = sortBy === 'name' ? withScores
+    : [...withScores].sort((a, b) => {
+        // Unrated players always sink to the bottom regardless of direction.
+        if (a.avg === null && b.avg === null) return 0;
+        if (a.avg === null) return 1;
+        if (b.avg === null) return -1;
+        return sortBy === 'scoreDesc' ? b.avg - a.avg : a.avg - b.avg;
+      });
   if (filtered.length === 0) return (
     <div className="p-4">
       <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400 text-sm">
@@ -2182,9 +2207,7 @@ function PlayersList({ members, teams, users, playerEvals, onSelectPlayer, searc
   );
   return (
     <div className="p-4 space-y-2 w-full min-w-0">
-      {filtered.slice(page * pageSize, (page + 1) * pageSize).map(m => {
-        const evals    = playerEvals.filter(e => e.player_id === m.id);
-        const avg      = avgOfField(evals, 'rating');
+      {filtered.slice(page * pageSize, (page + 1) * pageSize).map(({ member: m, evals, avg }) => {
         const trend    = calcTrend(evals, 'rating');
         const age      = ageMethod === 'dec31' ? calcAgeDec31(m.date_of_birth) : calcAge(m.date_of_birth);
         const team     = teams.find(t => t.id === m.team_id);
@@ -2469,8 +2492,21 @@ function CoachProfile({ user, teams, access, coachEvals, currentUser, onBack, on
 
 // â"€â"€ Coaches List â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-function CoachesList({ users, teams, access, coachEvals, onSelectCoach, search }) {
-  const coaches = users.filter(u => u.role !== 'admin' && (!search || (u.full_name || u.email || '').toLowerCase().includes(search.toLowerCase())));
+function CoachesList({ users, teams, access, coachEvals, onSelectCoach, search, sortBy = 'name' }) {
+  const withScores = users
+    .filter(u => u.role !== 'admin' && (!search || (u.full_name || u.email || '').toLowerCase().includes(search.toLowerCase())))
+    .map(u => {
+      const evals = coachEvals.filter(e => e.coach_id === u.id);
+      return { user: u, evals, avg: avgOfField(evals, 'overall_rating') };
+    });
+  const coaches = sortBy === 'name' ? withScores
+    : [...withScores].sort((a, b) => {
+        // Unrated coaches always sink to the bottom regardless of direction.
+        if (a.avg === null && b.avg === null) return 0;
+        if (a.avg === null) return 1;
+        if (b.avg === null) return -1;
+        return sortBy === 'scoreDesc' ? b.avg - a.avg : a.avg - b.avg;
+      });
   if (coaches.length === 0) return (
     <div className="p-4">
       <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400 text-sm">No coaches found.</div>
@@ -2478,9 +2514,7 @@ function CoachesList({ users, teams, access, coachEvals, onSelectCoach, search }
   );
   return (
     <div className="p-4 space-y-2 w-full min-w-0">
-      {coaches.map(u => {
-        const evals      = coachEvals.filter(e => e.coach_id === u.id);
-        const avg        = avgOfField(evals, 'overall_rating');
+      {coaches.map(({ user: u, evals, avg }) => {
         const trend      = calcTrend(evals, 'overall_rating');
         const coachTeams = access.filter(a => a.user_email === u.email).map(a => teams.find(t => t.id === a.team_id)).filter(Boolean);
         return (
@@ -2531,6 +2565,7 @@ export default function AdminDevelopmentHubTab({ filterOpen, onFilterClose, rese
   const mainTab    = mainTabProp    ?? localMainTab;
   const setMainTab = onMainTabChange ?? setLocalMainTab;
   const [search,         setSearch]         = useState('');
+  const [sortBy,         setSortBy]         = useState('name'); // 'name' | 'scoreDesc' | 'scoreAsc'
   const [filterAgeGroup,     setFilterAgeGroup]     = useState('');
   const [filterSquad,        setFilterSquad]        = useState('');
   const [filterGender,       setFilterGender]       = useState('');
@@ -2813,6 +2848,17 @@ export default function AdminDevelopmentHubTab({ filterOpen, onFilterClose, rese
                 placeholder={`Search ${mainTab.toLowerCase()}…`}
                 className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
+            <div className="relative shrink-0">
+              <ArrowUpDown size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none ${sortBy !== 'name' ? 'text-white' : 'text-slate-400'}`} />
+              <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                className={`appearance-none border text-xs font-semibold pl-7 pr-6 py-1.5 rounded-lg transition-colors ${
+                  sortBy !== 'name' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}>
+                <option value="name">Name (A–Z)</option>
+                <option value="scoreDesc">Score: High → Low</option>
+                <option value="scoreAsc">Score: Low → High</option>
+              </select>
+            </div>
             <button onClick={() => setShowFilters(f => !f)}
               className={`flex items-center gap-1.5 border text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
                 filterAgeGroup || filterSquad || filterGender || filterSeason || filterProgramType ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -2823,9 +2869,9 @@ export default function AdminDevelopmentHubTab({ filterOpen, onFilterClose, rese
 
           {/* Lists */}
           <div className="flex-1 overflow-y-auto">
-            {mainTab === 'Teams'        && <TeamsList        teams={filteredTeams} users={users} sessions={sessions} playerEvals={playerEvals} onSelectTeam={setSelectedTeam} search={search} pageSize={devSettings.listPageSize} />}
-            {mainTab === 'Players'      && <PlayersList      members={filteredMembers} teams={teams} users={users}       playerEvals={playerEvals} onSelectPlayer={setSelectedPlayer} search={search} ageMethod={devSettings.ageMethod} pageSize={devSettings.listPageSize} />}
-            {mainTab === 'Coaches'      && <CoachesList      users={users} teams={teams} access={access} coachEvals={coachEvals} onSelectCoach={setSelectedCoach} search={search} />}
+            {mainTab === 'Teams'        && <TeamsList        teams={filteredTeams} users={users} sessions={sessions} playerEvals={playerEvals} onSelectTeam={setSelectedTeam} search={search} sortBy={sortBy} pageSize={devSettings.listPageSize} />}
+            {mainTab === 'Players'      && <PlayersList      members={filteredMembers} teams={teams} users={users}       playerEvals={playerEvals} onSelectPlayer={setSelectedPlayer} search={search} sortBy={sortBy} ageMethod={devSettings.ageMethod} pageSize={devSettings.listPageSize} />}
+            {mainTab === 'Coaches'      && <CoachesList      users={users} teams={teams} access={access} coachEvals={coachEvals} onSelectCoach={setSelectedCoach} search={search} sortBy={sortBy} />}
           </div>
       </div>
     </div>
