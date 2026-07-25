@@ -198,8 +198,8 @@ Deno.serve(async (req) => {
     message = `Training for ${entityName} (${whenText}) is moving to ${overrideWhere} on ${record.pause_start} only — every other week stays at ${whereText}.`;
   } else if (pauseJustSet) {
     type = 'schedule_paused';
-    subject = 'Training paused';
-    message = `Training for ${entityName} (${whenText}) is paused from ${record.pause_start} to ${record.pause_end}.`;
+    subject = 'Training cancelled for a date';
+    message = `Training for ${entityName} (${whenText}) is cancelled from ${record.pause_start} to ${record.pause_end}.`;
   } else if (pauseJustCleared) {
     type = 'schedule_resumed';
     subject = 'Training resumed';

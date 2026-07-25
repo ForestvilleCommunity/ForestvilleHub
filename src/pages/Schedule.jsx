@@ -112,18 +112,13 @@ export default function Schedule() {
       if (!a.pause_start || !a.pause_end) return a;
       const s = dateStr(a.date);
       const inPauseRange = s >= a.pause_start && s <= a.pause_end;
+      if (!inPauseRange) return a;
       // Within the paused range, an override venue means this occurrence was
       // moved (not cancelled) — swap in the override venue/court for that date.
-      if (inPauseRange && a.override_venue_id) {
+      if (a.override_venue_id) {
         return { ...a, venue_id: a.override_venue_id, court_id: a.override_court_id || null, isMoved: true };
       }
-      return a;
-    })
-    .filter(a => {
-      if (!a.pause_start || !a.pause_end) return true;
-      const s = dateStr(a.date);
-      const inPauseRange = s >= a.pause_start && s <= a.pause_end;
-      return !inPauseRange || a.isMoved;
+      return { ...a, isCancelled: true };
     })
     .sort((a, b) => a.date - b.date || (a.start_time || '').localeCompare(b.start_time || ''));
 
@@ -195,51 +190,66 @@ export default function Schedule() {
               const key = `${a.id}-${i}`;
               const existing = sessionsByDate[dateStr(a.date)];
               const isCreating = creatingKey === key;
-              const dirUrl = directionsUrl(venue);
+              const dirUrl = a.isCancelled ? null : directionsUrl(venue);
               const venueLabel = venue || court
                 ? `${venue?.name || 'No venue'}${court ? ` · ${court.name}` : ''}`
                 : 'No venue set';
               return (
-                <div key={key} className="px-4 py-3.5 flex items-center gap-3">
-                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full shrink-0 whitespace-nowrap">
-                    {fmtDateLabel(a.date)}
-                  </span>
-                  {a.start_time && (
-                    <span className="flex items-center gap-1 text-sm text-slate-500 shrink-0">
-                      <Clock size={12} />{fmt12(a.start_time)}
-                    </span>
-                  )}
-                  {a.isMoved && (
-                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap">
-                      Moved
-                    </span>
-                  )}
-                  {dirUrl ? (
-                    <a
-                      href={dirUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-sm text-blue-500 hover:text-blue-700 hover:underline truncate flex-1 min-w-0"
-                      title="Get directions"
-                    >
-                      <Navigation size={12} className="shrink-0" />
-                      <span className="truncate">{venueLabel}</span>
-                    </a>
+                <div key={key} className={`px-4 py-3.5 flex items-center justify-between gap-3 ${a.isCancelled ? 'opacity-60' : ''}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full shrink-0 whitespace-nowrap">
+                        {fmtDateLabel(a.date)}
+                      </span>
+                      {a.start_time && (
+                        <span className="flex items-center gap-1 text-sm text-slate-500 shrink-0">
+                          <Clock size={12} />{fmt12(a.start_time)}
+                        </span>
+                      )}
+                      {a.isMoved && (
+                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap">
+                          Moved
+                        </span>
+                      )}
+                      {a.isCancelled && (
+                        <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap">
+                          Cancelled
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1">
+                      {dirUrl ? (
+                        <a
+                          href={dirUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-sm text-blue-500 hover:text-blue-700 hover:underline min-w-0"
+                          title="Get directions"
+                        >
+                          <Navigation size={12} className="shrink-0" />
+                          <span className="truncate">{venueLabel}</span>
+                        </a>
+                      ) : (
+                        <span className="flex items-center gap-1 text-sm text-slate-400 min-w-0">
+                          <MapPin size={12} className="shrink-0" />
+                          <span className="truncate">{venueLabel}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {a.isCancelled && !existing ? (
+                    <span className="shrink-0 text-xs font-semibold text-red-400 px-3 py-1.5">No training</span>
                   ) : (
-                    <span className="flex items-center gap-1 text-sm text-slate-400 truncate flex-1 min-w-0">
-                      <MapPin size={12} className="shrink-0" />
-                      {venueLabel}
-                    </span>
+                    <button
+                      onClick={() => planSession(a, key)}
+                      disabled={isCreating}
+                      className={`shrink-0 flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+                        existing ? 'bg-slate-100 text-slate-600 hover:bg-slate-200' : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {isCreating ? '…' : existing ? 'View Session' : (<><ClipboardPlus size={12} /> Plan Session</>)}
+                    </button>
                   )}
-                  <button
-                    onClick={() => planSession(a, key)}
-                    disabled={isCreating}
-                    className={`shrink-0 flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
-                      existing ? 'bg-slate-100 text-slate-600 hover:bg-slate-200' : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    {isCreating ? '…' : existing ? 'View Session' : (<><ClipboardPlus size={12} /> Plan Session</>)}
-                  </button>
                 </div>
               );
             })}

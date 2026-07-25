@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
-import { CalendarDays, MapPin, LayoutGrid, List, X, Plus } from 'lucide-react';
+import { X } from 'lucide-react';
 import { db } from '@/api/db';
 import AdminVenuesTab from './AdminVenuesTab';
 import TrainingScheduleTab from './TrainingScheduleTab';
@@ -185,20 +185,9 @@ function TrainingSettingsModal({ onClose }) {
 }
 
 const SUB_TABS = [
-  { id: 'schedule',   label: 'Schedule' },
-  { id: 'statistics', label: 'Statistics' },
-  { id: 'venues',     label: 'Venues' },
+  { id: 'schedule', label: 'Schedule' },
+  { id: 'venues',   label: 'Venues' },
 ];
-
-function StatCard({ label, value, sub, color = 'bg-blue-50 text-blue-700' }) {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center">
-      <p className={`text-3xl font-black ${color}`}>{value}</p>
-      <p className="text-sm font-semibold text-slate-700 mt-0.5">{label}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 function CourtsTab() {
   const [venues, setVenues] = useState([]);
@@ -288,41 +277,39 @@ export default function AdminTrainingTab({ onProfileClick, resetTrigger, subTab:
   const [localSubTab, setLocalSubTab] = useState('schedule');
   const subTab = subTabProp ?? localSubTab;
   const setSubTab = onSubTabChange ?? setLocalSubTab;
-  const [overviewData, setOverviewData] = useState(null);
+  const [modalData, setModalData] = useState(null);
   const [showAddTraining, setShowAddTraining] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [expandedDays, setExpandedDays] = useState({});
+  const [trainingRefresh, setTrainingRefresh] = useState(0);
 
   useEffect(() => { if (resetTrigger) { setSubTab('schedule'); setShowAddTraining(false); setShowSettings(false); } }, [resetTrigger]);
   useEffect(() => { if (!triggerAddTraining) return; setShowAddTraining(true); }, [triggerAddTraining]);
   useEffect(() => { if (!triggerSettings) return; setShowSettings(true); }, [triggerSettings]);
 
-  const loadOverview = () => {
-    Promise.all([
-      db.entities.Venue.list('name', 200).catch(() => []),
-      db.entities.Court.list('name', 200).catch(() => []),
-      db.entities.TrainingAllocation.list('-created_date', 500).catch(() => []),
-      db.entities.Team.filter({ visibility: 'Club' }, 'team_name', 1000).catch(() => []),
-      db.entities.Squad.list('name', 200).catch(() => []),
-    ]).then(([vs, cs, as, ts, sqs]) => {
-      setOverviewData({ venues: vs, courts: cs, allocations: as, teams: ts, squads: sqs });
-    });
+  const openAddTraining = () => {
+    if (!modalData) {
+      Promise.all([
+        db.entities.Venue.list('name', 200).catch(() => []),
+        db.entities.Court.list('name', 200).catch(() => []),
+        db.entities.Team.filter({ visibility: 'Club' }, 'team_name', 1000).catch(() => []),
+        db.entities.Squad.list('name', 200).catch(() => []),
+      ]).then(([vs, cs, ts, sqs]) => {
+        setModalData({ venues: vs, courts: cs, teams: ts, squads: sqs });
+      });
+    }
+    setShowAddTraining(true);
   };
-
-  useEffect(() => { if (subTab === 'statistics') loadOverview(); }, [subTab]);
-
-  const todayName = DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1];
 
   return (
     <div className="flex flex-col h-full">
       {showAddTraining && (
         <AddTrainingModal
           onClose={() => setShowAddTraining(false)}
-          onSaved={() => { setShowAddTraining(false); loadOverview(); }}
-          initialVenues={overviewData?.venues}
-          initialCourts={overviewData?.courts}
-          initialTeams={overviewData?.teams}
-          initialSquads={overviewData?.squads}
+          onSaved={() => { setShowAddTraining(false); setTrainingRefresh(c => c + 1); }}
+          initialVenues={modalData?.venues}
+          initialCourts={modalData?.courts}
+          initialTeams={modalData?.teams}
+          initialSquads={modalData?.squads}
         />
       )}
 
@@ -340,102 +327,7 @@ export default function AdminTrainingTab({ onProfileClick, resetTrigger, subTab:
 
       <div className="flex-1 overflow-hidden flex flex-col">
         {subTab === 'schedule' && (
-          <TrainingScheduleTab onProfileClick={onProfileClick} />
-        )}
-
-        {subTab === 'statistics' && (
-          <div className="flex-1 overflow-y-auto p-4 max-w-3xl mx-auto w-full space-y-4">
-            {!overviewData ? <Spinner /> : (() => {
-              const { venues, courts, allocations, teams, squads } = overviewData;
-              const getTeamName = a => a.team_id ? (teams.find(t => t.id === a.team_id)?.team_name ?? 'Unknown') : null;
-              const getSquadName = a => a.squad_id ? (squads.find(s => s.id === a.squad_id)?.name ?? 'Unknown') : null;
-              const getName = a => getTeamName(a) || getSquadName(a) || '—';
-              const getVenue = a => venues.find(v => v.id === a.venue_id)?.name || a.venue || null;
-              const getCourt = a => courts.find(c => c.id === a.court_id)?.name || a.court || null;
-              const todayAllocs = allocations.filter(a => a.day === todayName).sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
-              const byDay = DAYS.reduce((acc, d) => { const al = allocations.filter(a => a.day === d); if (al.length) acc[d] = al; return acc; }, {});
-
-              return (
-                <>
-                  {/* Summary cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <StatCard label="Venues" value={venues.filter(v => v.status !== 'Inactive').length} color="text-blue-700" />
-                    <StatCard label="Courts" value={courts.length} color="text-indigo-700" />
-                    <StatCard label="Sessions" value={allocations.length} color="text-green-700" />
-                    <StatCard label="Active Days" value={Object.keys(byDay).length} color="text-amber-700" />
-                  </div>
-
-                  {/* Today's training */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Today — {todayName}</p>
-                      <button onClick={() => setShowAddTraining(true)} className="flex items-center gap-1 text-xs text-blue-600 font-semibold hover:underline">
-                        <Plus size={13} /> Add Training
-                      </button>
-                    </div>
-                    {todayAllocs.length === 0 ? (
-                      <div className="bg-white rounded-2xl border border-slate-200 p-5 text-center text-slate-400 text-sm">No training scheduled for today</div>
-                    ) : (
-                      <div className="space-y-2">
-                        {todayAllocs.map(a => (
-                          <div key={a.id} className="bg-white rounded-2xl border border-slate-200 px-4 py-3 flex items-center gap-3">
-                            <div className="w-2 h-8 rounded-full bg-blue-500 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-slate-800 text-sm truncate">{getName(a)}</p>
-                              <p className="text-xs text-slate-400">{[a.start_time && fmt12(a.start_time), a.end_time && fmt12(a.end_time)].filter(Boolean).join(' – ')}{getVenue(a) ? ` · ${getVenue(a)}` : ''}{getCourt(a) ? ` · ${getCourt(a)}` : ''}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Weekly breakdown */}
-                  {Object.keys(byDay).length > 0 && (
-                    <div>
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Weekly Schedule</p>
-                      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                        {Object.entries(byDay).map(([day, allocs], i) => {
-                          const sorted = allocs.sort((a,b) => (a.start_time||'').localeCompare(b.start_time||''));
-                          const expanded = !!expandedDays[day];
-                          const shown = expanded ? sorted : sorted.slice(0, 3);
-                          const hiddenCount = sorted.length - shown.length;
-                          return (
-                            <div key={day} className={`px-4 py-3 flex items-start gap-3 ${i > 0 ? 'border-t border-slate-100' : ''}`}>
-                              <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">{day.slice(0,3).toUpperCase()}</span>
-                              <div className="flex flex-wrap gap-1.5 items-center">
-                                {shown.map(a => (
-                                  <span key={a.id} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded-lg font-medium">
-                                    {getName(a)}{a.start_time ? ` ${fmt12(a.start_time)}` : ''}
-                                  </span>
-                                ))}
-                                {hiddenCount > 0 && (
-                                  <button
-                                    onClick={() => setExpandedDays(prev => ({ ...prev, [day]: true }))}
-                                    className="text-xs text-blue-600 hover:text-blue-700 px-2 py-1 font-semibold"
-                                  >
-                                    +{hiddenCount} more
-                                  </button>
-                                )}
-                                {expanded && sorted.length > 3 && (
-                                  <button
-                                    onClick={() => setExpandedDays(prev => ({ ...prev, [day]: false }))}
-                                    className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 font-semibold"
-                                  >
-                                    Show less
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
+          <TrainingScheduleTab onProfileClick={onProfileClick} onAddTraining={openAddTraining} refreshTrigger={trainingRefresh} />
         )}
 
         {subTab === 'venues' && (

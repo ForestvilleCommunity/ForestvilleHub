@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useMemo, useRef } from 'react';
-import { MapPin, Clock, Users, CalendarDays, SlidersHorizontal, X, Search, LayoutList, Timer, CheckSquare, Check, Trash2, Pause } from 'lucide-react';
+import { MapPin, Clock, Users, CalendarDays, SlidersHorizontal, X, Search, LayoutList, Timer, CheckSquare, Check, Trash2, Pause, Plus } from 'lucide-react';
 import { db } from '@/api/db';
 import { Spinner } from './shared';
 
@@ -292,8 +292,8 @@ function CourtGantt({ dayAllocs, allocInfo, onSelect, venueEntities }) {
                             className={`rounded-2xl ${conflict ? 'bg-red-500' : info.color.bg} text-white px-2.5 flex flex-col justify-center
                                         overflow-hidden hover:opacity-90 active:scale-95 transition-all shadow-md ${paused ? 'opacity-50' : ''}`}>
                             {paused && (
-                              <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-amber-400 flex items-center justify-center shadow">
-                                <Pause size={9} className="text-amber-950" fill="currentColor" />
+                              <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-400 flex items-center justify-center shadow">
+                                <Pause size={9} className="text-red-950" fill="currentColor" />
                               </div>
                             )}
                             {moved && (
@@ -307,7 +307,7 @@ function CourtGantt({ dayAllocs, allocInfo, onSelect, venueEntities }) {
                             <p className="font-bold text-[12px] leading-tight truncate">{info.name}</p>
                             {!narrow && (
                               <p className="text-[10px] text-white/80 mt-0.5 leading-tight truncate">
-                                {paused ? 'Paused' : moved ? 'Moved venue' : `${fmt12(a.start_time)} – ${fmt12(a.end_time)}`}
+                                {paused ? 'Cancelled' : moved ? 'Moved venue' : `${fmt12(a.start_time)} – ${fmt12(a.end_time)}`}
                               </p>
                             )}
                             {!narrow && !paused && !moved && info.ageGroup && (
@@ -396,8 +396,8 @@ function Timeline({ allocs, allocInfo, onSelect }) {
                 className={`rounded-2xl ${info.color.light} border ${info.color.border} hover:brightness-95 active:scale-[0.98] transition-all text-left overflow-hidden shadow-sm ${paused ? 'opacity-60' : ''}`}>
                 <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl ${info.color.bg}`} />
                 {paused && (
-                  <div className="absolute top-1 right-1 flex items-center gap-0.5 bg-amber-400 text-amber-950 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                    <Pause size={8} fill="currentColor" /> Paused
+                  <div className="absolute top-1 right-1 flex items-center gap-0.5 bg-red-400 text-red-950 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                    <Pause size={8} fill="currentColor" /> Cancelled
                   </div>
                 )}
                 {moved && (
@@ -460,7 +460,7 @@ function ListView({ activeDays, byDay, allocInfo, onSelect, total, selectMode, s
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <p className="font-bold text-slate-900 text-sm truncate">{info.name}</p>
-                        {isCancelled(a) && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">⏸ Paused</span>}
+                        {isCancelled(a) && <span className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0">🚫 Cancelled</span>}
                         {isMoved(a) && <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full shrink-0">📍 Moved</span>}
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 flex-wrap">
@@ -636,8 +636,8 @@ function SlotDetail({ alloc, info, venueEntities, courts, onClose, onProfileClic
               </div>
             )}
             <div className="pt-2 border-t border-slate-100">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Pause training (optional)</label>
-              <p className="text-xs text-slate-400 mb-2">Skip this recurring slot between two dates — e.g. school holidays or a venue closure. It resumes automatically after the end date.</p>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Cancel training (optional)</label>
+              <p className="text-xs text-slate-400 mb-2">Cancel this recurring slot between two dates — e.g. school holidays or a venue closure. It resumes automatically after the end date.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-400 block mb-1">From</label>
@@ -651,7 +651,7 @@ function SlotDetail({ alloc, info, venueEntities, courts, onClose, onProfileClic
               {(form.pause_start || form.pause_end) && (
                 <button onClick={() => { upd('pause_start', ''); upd('pause_end', ''); upd('override_venue_id', ''); upd('override_court_id', ''); }}
                   className="text-xs text-blue-600 hover:text-blue-700 font-semibold mt-2">
-                  Clear pause/move dates
+                  Clear cancel/move dates
                 </button>
               )}
             </div>
@@ -687,7 +687,7 @@ function SlotDetail({ alloc, info, venueEntities, courts, onClose, onProfileClic
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             {info.ageGroup && <span className="text-white/80 text-xs font-semibold bg-white/20 px-2 py-0.5 rounded-full">{info.ageGroup}</span>}
             {duration     && <span className="text-white/80 text-xs font-semibold bg-white/20 px-2 py-0.5 rounded-full">{duration}</span>}
-            {isCancelled(alloc) && <span className="text-xs font-bold bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full">⏸ Paused now</span>}
+            {isCancelled(alloc) && <span className="text-xs font-bold bg-red-400 text-red-950 px-2 py-0.5 rounded-full">🚫 Cancelled now</span>}
             {isMoved(alloc) && <span className="text-xs font-bold bg-blue-400 text-blue-950 px-2 py-0.5 rounded-full">📍 Moved now</span>}
           </div>
         </div>
@@ -698,8 +698,8 @@ function SlotDetail({ alloc, info, venueEntities, courts, onClose, onProfileClic
                 Moved to <strong>{venueEntities.find(v => v.id === alloc.override_venue_id)?.name || 'a different venue'}</strong>{alloc.override_court_id ? <> · <strong>{courts.find(c => c.id === alloc.override_court_id)?.name}</strong></> : null} on <strong>{fmtDateNice(alloc.pause_start)}</strong>
               </div>
             ) : (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-800">
-                Paused from <strong>{alloc.pause_start || '—'}</strong> to <strong>{alloc.pause_end || '—'}</strong>
+              <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-800">
+                Cancelled from <strong>{alloc.pause_start || '—'}</strong> to <strong>{alloc.pause_end || '—'}</strong>
               </div>
             )
           )}
@@ -909,7 +909,7 @@ function BulkMoveModal({ count, venueEntities, courts, onClose, onApply }) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-export default function TrainingScheduleTab({ onProfileClick }) {
+export default function TrainingScheduleTab({ onProfileClick, onAddTraining, refreshTrigger }) {
   const [allocations,   setAllocations]   = useState([]);
   const [teams,         setTeams]         = useState([]);
   const [squads,        setSquads]        = useState([]);
@@ -947,7 +947,7 @@ export default function TrainingScheduleTab({ onProfileClick }) {
       if (first) setSelectedDay(first);
       setLoading(false);
     });
-  }, []);
+  }, [refreshTrigger]);
 
   const toggleSelectId = (id) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
@@ -1082,6 +1082,13 @@ export default function TrainingScheduleTab({ onProfileClick }) {
           <span className="hidden sm:inline">Filters</span>
           {activeFilterCount > 0 && <span className="bg-white text-blue-600 rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-black">{activeFilterCount}</span>}
         </button>
+        {onAddTraining && (
+          <button onClick={onAddTraining} title="Add Training"
+            className="flex items-center gap-1.5 text-sm font-semibold px-3 py-2 rounded-xl transition-colors shrink-0 bg-blue-600 text-white hover:bg-blue-700">
+            <Plus size={14} />
+            <span className="hidden sm:inline">Add Training</span>
+          </button>
+        )}
         {/* View toggle */}
         <div className="flex bg-slate-100 rounded-xl p-1 shrink-0 gap-0.5">
           <button onClick={() => setView('court')} title="By court"
