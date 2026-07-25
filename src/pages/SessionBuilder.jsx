@@ -35,6 +35,14 @@ const DEFAULT_FORM = {
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+// Local draft for a session that hasn't been created in the DB yet — there's
+// no row to autosave to, so we mirror progress into sessionStorage instead
+// (same pattern LiveSession.jsx uses for in-progress drill tracking).
+const NEW_DRAFT_KEY = 'coachpad_session_builder_draft';
+function saveNewDraft(state) { try { sessionStorage.setItem(NEW_DRAFT_KEY, JSON.stringify(state)); } catch {} }
+function loadNewDraft() { try { const raw = sessionStorage.getItem(NEW_DRAFT_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } }
+function clearNewDraft() { try { sessionStorage.removeItem(NEW_DRAFT_KEY); } catch {} }
+
 // Steps: 1=Type, 2=Team/Players, 3=Details, 4=Drills, 5=Timeline
 const STEP_LABELS_TEAM = ['Type', 'Team', 'Details', 'Structure'];
 const STEP_LABELS_PRIVATE = ['Type', 'Players', 'Details', 'Structure'];
@@ -61,8 +69,16 @@ export default function SessionBuilder() {
   const [loading, setLoading] = useState(isEdit);
   const [showDrillPicker, setShowDrillPicker] = useState(false);
   const [sessionBlocks, setSessionBlocks] = useState(() => createDefaultBlocks());
+  const [autoSaveStatus, setAutoSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'saved'
+  // Distinct from `loading`: for a brand-new session `loading` starts false
+  // (nothing to fetch), so effects would otherwise run — and could write a
+  // blank draft over a real one — before the async restore-from-draft below
+  // has had a chance to run. Nothing that reads/writes the draft should fire
+  // until this flips true.
+  const [initReady, setInitReady] = useState(false);
   const initialSnapshotRef = useRef(null);
   const justSavedRef = useRef(false);
+  const autoSaveTimerRef = useRef(null);
 
   useEffect(() => {
     db.auth.me().then(async (u) => {
@@ -91,12 +107,34 @@ export default function SessionBuilder() {
         await loadSession();
       } else {
         setLoading(false);
+        // Baseline is the blank form — a restored draft below is real unsaved
+        // progress from before, so it should read as dirty, not as "saved".
         initialSnapshotRef.current = JSON.stringify({ form, sessionDrills: [], sessionBlocks, selectedPrivatePlayers: [] });
+        const draft = loadNewDraft();
+        if (draft) {
+          setForm(draft.form || { ...DEFAULT_FORM, date: todayStr() });
+          setSessionDrills(draft.sessionDrills || []);
+          setSessionBlocks(draft.sessionBlocks || createDefaultBlocks());
+          setSelectedPrivatePlayers(draft.selectedPrivatePlayers || []);
+          setStep(draft.step || 1);
+          setVenueTouched(true); // don't let the training-schedule auto-fill clobber restored values
+          toast('Restored your unsaved session from last time.', { duration: 4000 });
+        }
       }
-    }).catch(() => setLoading(false));
+      setInitReady(true);
+    }).catch(() => { setLoading(false); setInitReady(true); });
   }, []);
 
   const isDirty = () => JSON.stringify({ form, sessionDrills, sessionBlocks, selectedPrivatePlayers }) !== initialSnapshotRef.current;
+
+  // New (not-yet-created) session: mirror progress into sessionStorage so a
+  // crash/reload doesn't lose it. Existing sessions autosave to the DB
+  // directly instead (below), since there's already a real row to update.
+  useEffect(() => {
+    if (isEdit || !initReady) return;
+    if (!isDirty()) { clearNewDraft(); return; }
+    saveNewDraft({ form, sessionDrills, sessionBlocks, selectedPrivatePlayers, step });
+  }, [form, sessionDrills, sessionBlocks, selectedPrivatePlayers, step, isEdit, initReady]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -110,6 +148,7 @@ export default function SessionBuilder() {
 
   const handleLeave = () => {
     if (isDirty() && !window.confirm('You have unsaved changes to this session. Leave without saving?')) return;
+    if (!isEdit) clearNewDraft(); // they just confirmed they don't want to keep this draft
     // Go back to wherever the coach actually came from (Sessions list, Schedule's
     // "Plan Session", etc.) instead of always landing on the generic Sessions list.
     if (window.history.state?.idx > 0) navigate(-1);
@@ -201,6 +240,41 @@ export default function SessionBuilder() {
     setStep(s => Math.min(s + 1, 4));
   };
 
+  // Shared by the explicit Save button and the silent autosave below.
+  const buildPayload = () => ({
+    ...form,
+    team_id: form.team_id || null,
+    venue_id: form.venue_id || null,
+    court_id: form.court_id || null,
+    start_time: form.start_time || null,
+    duration_minutes: form.duration_minutes ? Number(form.duration_minutes) : undefined,
+    owner_user_email: user?.email,
+    owner_id: user?.id,
+    player_ids: form.session_type === 'Private' && selectedPrivatePlayers.length > 0
+      ? JSON.stringify(selectedPrivatePlayers)
+      : undefined,
+    session_blocks: JSON.stringify(sessionBlocks),
+    season_name: getCurrentSeason().name,
+  });
+
+  const syncSessionDrills = async (sid) => {
+    const existing = await db.entities.SessionDrill.filter({ session_id: sid }).catch(() => []);
+    await Promise.all(existing.map(sd => db.entities.SessionDrill.delete(sd.id).catch(() => {})));
+    const validDrills = sessionDrills.filter(sd => sd.drill?.id);
+    await Promise.all(validDrills.map((sd, i) => db.entities.SessionDrill.create({
+      session_id: sid,
+      drill_id: sd.drill.id,
+      block_id: sd.block_id,
+      order: i + 1,
+      duration: sd.duration ? Number(sd.duration) : undefined,
+      session_notes: sd.session_notes,
+      goal_type: sd.goal_type,
+      goal_target: sd.goal_target,
+      goal_result: sd.goal_result,
+      status: sd.status,
+    }).catch(() => {})));
+  };
+
   const handleSave = async () => {
     const errs = {};
     if (!form.session_name?.trim()) errs.session_name = 'Session name is required';
@@ -215,23 +289,10 @@ export default function SessionBuilder() {
       }
     }
     if (Object.keys(errs).length) { setErrors(errs); toast.error('Please complete the required fields.'); return; }
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     setSaving(true);
     try {
-      const payload = {
-        ...form,
-        team_id: form.team_id || null,
-        venue_id: form.venue_id || null,
-        court_id: form.court_id || null,
-        start_time: form.start_time || null,
-        duration_minutes: form.duration_minutes ? Number(form.duration_minutes) : undefined,
-        owner_user_email: user?.email,
-        owner_id: user?.id,
-        player_ids: form.session_type === 'Private' && selectedPrivatePlayers.length > 0
-          ? JSON.stringify(selectedPrivatePlayers)
-          : undefined,
-        session_blocks: JSON.stringify(sessionBlocks),
-        season_name: getCurrentSeason().name,
-      };
+      const payload = buildPayload();
       let sid = sessionId;
       if (isEdit) {
         await db.entities.Session.update(sessionId, payload);
@@ -239,25 +300,10 @@ export default function SessionBuilder() {
         const created = await db.entities.Session.create(payload);
         sid = created.id;
       }
-      if (sid) {
-        const existing = await db.entities.SessionDrill.filter({ session_id: sid }).catch(() => []);
-        await Promise.all(existing.map(sd => db.entities.SessionDrill.delete(sd.id).catch(() => {})));
-        const validDrills = sessionDrills.filter(sd => sd.drill?.id);
-        await Promise.all(validDrills.map((sd, i) => db.entities.SessionDrill.create({
-          session_id: sid,
-          drill_id: sd.drill.id,
-          block_id: sd.block_id,
-          order: i + 1,
-          duration: sd.duration ? Number(sd.duration) : undefined,
-          session_notes: sd.session_notes,
-          goal_type: sd.goal_type,
-          goal_target: sd.goal_target,
-          goal_result: sd.goal_result,
-          status: sd.status,
-        }).catch(() => {})));
-      }
+      if (sid) await syncSessionDrills(sid);
       toast.success(isEdit ? 'Session updated!' : 'Session created!');
       justSavedRef.current = true;
+      if (!isEdit) clearNewDraft();
       navigate('/sessions');
       // Keep saving=true — button stays disabled until component unmounts on navigation
     } catch (e) {
@@ -265,6 +311,31 @@ export default function SessionBuilder() {
       setSaving(false);
     }
   };
+
+  // Existing sessions autosave to the DB in the background a couple of
+  // seconds after the coach stops typing/editing — so a crash or dropped
+  // connection loses at most a couple of seconds of work, not the whole
+  // editing session. Silent by design: failures just leave the explicit
+  // Save button and the beforeunload warning as the backstop.
+  const autoSaveNow = async () => {
+    if (!isEdit || !form.session_name?.trim() || !form.date || saving) return;
+    setAutoSaveStatus('saving');
+    try {
+      await db.entities.Session.update(sessionId, buildPayload());
+      await syncSessionDrills(sessionId);
+      initialSnapshotRef.current = JSON.stringify({ form, sessionDrills, sessionBlocks, selectedPrivatePlayers });
+      setAutoSaveStatus('saved');
+    } catch {
+      setAutoSaveStatus('idle');
+    }
+  };
+
+  useEffect(() => {
+    if (!isEdit || !initReady || saving || !isDirty()) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(autoSaveNow, 2500);
+    return () => clearTimeout(autoSaveTimerRef.current);
+  }, [form, sessionDrills, sessionBlocks, selectedPrivatePlayers]);
 
   const addDrill = (drill) => {
     if (!sessionDrills.find(sd => sd.drill?.id === drill.id)) {
@@ -299,6 +370,9 @@ export default function SessionBuilder() {
             <ArrowLeft size={20} />
           </button>
           <h1 className="font-bold text-slate-900 flex-1">Edit Session</h1>
+          {!saving && autoSaveStatus !== 'idle' && (
+            <span className="text-xs text-slate-400">{autoSaveStatus === 'saving' ? 'Saving…' : 'All changes saved'}</span>
+          )}
           <button onClick={handleSave} disabled={saving}
             className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl">
             <Save size={15} />{saving ? 'Saving...' : 'Save'}
