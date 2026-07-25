@@ -2571,28 +2571,53 @@ export default function AdminDevelopmentHubTab({ filterOpen, onFilterClose, rese
     finally { setLoading(false); }
   };
 
-  const ageGroups    = useMemo(() => [...new Set(teams.map(t => t.age_group).filter(Boolean))].sort(), [teams]);
-  const genders      = useMemo(() => [...new Set(teams.map(t => t.gender).filter(Boolean))].sort(), [teams]);
-  const seasons      = useMemo(() => [...new Set(teams.map(t => t.season).filter(Boolean))].sort(), [teams]);
-  const programTypes = useMemo(() => [...new Set(teams.map(t => t.program_type).filter(Boolean))].sort(), [teams]);
-  const activeSquads = useMemo(() => squads.filter(s => s.status !== 'Archived'), [squads]);
+  // Teams matching every ACTIVE filter except the one named in `exclude` — used
+  // to build each dropdown's own option list from the others' current selections,
+  // so e.g. picking "District" narrows the Squad list to squads with a District team.
+  const teamsMatchingFiltersExcept = (exclude) => teams.filter(t => {
+    if (exclude !== 'ageGroup'    && filterAgeGroup    && t.age_group    !== filterAgeGroup)    return false;
+    if (exclude !== 'gender'      && filterGender      && t.gender      !== filterGender)      return false;
+    if (exclude !== 'season'      && filterSeason      && t.season      !== filterSeason)      return false;
+    if (exclude !== 'programType' && filterProgramType && t.program_type !== filterProgramType) return false;
+    if (exclude !== 'squad' && filterSquad) {
+      const sq = squads.find(s => s.id === filterSquad);
+      if (!sq) return false;
+      let ids = [];
+      try { ids = JSON.parse(sq.team_ids || '[]'); } catch { ids = []; }
+      if (!ids.includes(t.id)) return false;
+    }
+    return true;
+  });
 
-  const filteredTeams = useMemo(() => {
-    return teams.filter(t => {
-      if (filterAgeGroup    && t.age_group    !== filterAgeGroup)    return false;
-      if (filterGender      && t.gender      !== filterGender)      return false;
-      if (filterSeason      && t.season      !== filterSeason)      return false;
-      if (filterProgramType && t.program_type !== filterProgramType) return false;
-      if (filterSquad) {
-        const sq = squads.find(s => s.id === filterSquad);
-        if (!sq) return false;
-        let ids = [];
-        try { ids = JSON.parse(sq.team_ids || '[]'); } catch { ids = []; }
-        if (!ids.includes(t.id)) return false;
-      }
-      return true;
+  const programTypes = useMemo(() => [...new Set(teamsMatchingFiltersExcept('programType').map(t => t.program_type).filter(Boolean))].sort(),
+    [teams, squads, filterAgeGroup, filterGender, filterSeason, filterSquad]);
+  const ageGroups    = useMemo(() => [...new Set(teamsMatchingFiltersExcept('ageGroup').map(t => t.age_group).filter(Boolean))].sort(),
+    [teams, squads, filterGender, filterSeason, filterSquad, filterProgramType]);
+  const genders      = useMemo(() => [...new Set(teamsMatchingFiltersExcept('gender').map(t => t.gender).filter(Boolean))].sort(),
+    [teams, squads, filterAgeGroup, filterSeason, filterSquad, filterProgramType]);
+  const seasons      = useMemo(() => [...new Set(teamsMatchingFiltersExcept('season').map(t => t.season).filter(Boolean))].sort(),
+    [teams, squads, filterAgeGroup, filterGender, filterSquad, filterProgramType]);
+  const activeSquads = useMemo(() => {
+    const relevantTeamIds = new Set(teamsMatchingFiltersExcept('squad').map(t => t.id));
+    return squads.filter(s => {
+      if (s.status === 'Archived') return false;
+      let ids = [];
+      try { ids = JSON.parse(s.team_ids || '[]'); } catch { ids = []; }
+      return ids.some(id => relevantTeamIds.has(id));
     });
-  }, [teams, squads, filterAgeGroup, filterGender, filterSeason, filterSquad, filterProgramType]);
+  }, [teams, squads, filterAgeGroup, filterGender, filterSeason, filterProgramType]);
+
+  // If a filter's current value falls out of its own (now-narrower) option
+  // list because another filter changed, clear it instead of silently
+  // keeping an impossible combination selected.
+  useEffect(() => { if (filterProgramType && !programTypes.includes(filterProgramType)) setFilterProgramType(''); }, [programTypes]);
+  useEffect(() => { if (filterAgeGroup && !ageGroups.includes(filterAgeGroup)) setFilterAgeGroup(''); }, [ageGroups]);
+  useEffect(() => { if (filterGender && !genders.includes(filterGender)) setFilterGender(''); }, [genders]);
+  useEffect(() => { if (filterSeason && !seasons.includes(filterSeason)) setFilterSeason(''); }, [seasons]);
+  useEffect(() => { if (filterSquad && !activeSquads.some(s => s.id === filterSquad)) setFilterSquad(''); }, [activeSquads]);
+
+  const filteredTeams = useMemo(() => teamsMatchingFiltersExcept(null),
+    [teams, squads, filterAgeGroup, filterGender, filterSeason, filterSquad, filterProgramType]);
 
   if (loading) return (
     <div className="flex-1 flex flex-col">

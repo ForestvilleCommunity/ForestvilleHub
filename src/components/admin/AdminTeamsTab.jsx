@@ -12,7 +12,7 @@ import TeamProfile from './TeamProfile';
 import MemberProfile from './MemberProfile';
 import AdminSquadsTab from './AdminSquadsTab';
 import AssignMemberModal from './AssignMemberModal';
-import { getCurrentSeason } from '@/lib/season';
+import { getCurrentSeason, teamNameToAgeGroup } from '@/lib/season';
 
 const getEmptyForm = () => {
   const season = getCurrentSeason();
@@ -212,6 +212,20 @@ export default function AdminTeamsTab({ onProfileClick, resetTrigger, section: s
     await Promise.all(needsUpdate.map(t =>
       db.entities.Team.update(t.id, { gender: FEMALE_WORDS.test(t.team_name) ? 'Female' : 'Male' })
     ));
+    load();
+  };
+
+  // A member's age group for club stats/filters is whichever team they're
+  // registered on (that's the competition division they actually play in —
+  // it correctly handles a player "playing up" for free, since that just
+  // means they're on an older team). Most team names already say the age
+  // group outright ("Under 12 Girls Team 2"), so infer it from there.
+  const autoAssignTeamAgeGroups = async () => {
+    const candidates = teams.filter(t => !t.age_group).map(t => ({ team: t, guess: teamNameToAgeGroup(t.team_name) })).filter(c => c.guess);
+    const unmatched = teams.filter(t => !t.age_group).length - candidates.length;
+    if (candidates.length === 0) { alert('No teams with a name CoachPad can confidently match to an age group — add the rest manually via Edit Team.'); return; }
+    if (!window.confirm(`Auto-assign age group to ${candidates.length} team${candidates.length !== 1 ? 's' : ''} based on their name (e.g. "Under 12 Girls Team 2" → U12)?${unmatched > 0 ? `\n\n${unmatched} team${unmatched !== 1 ? 's' : ''} without a clear age in the name will be skipped — set those manually.` : ''}`)) return;
+    await Promise.all(candidates.map(({ team, guess }) => db.entities.Team.update(team.id, { age_group: guess })));
     load();
   };
 
@@ -473,6 +487,12 @@ export default function AdminTeamsTab({ onProfileClick, resetTrigger, section: s
                               <button onClick={() => { autoAssignTeamGenders(); setShowMoreMenu(false); }}
                                 className="w-full text-left px-4 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 flex items-center gap-2">
                                 ⚡ Auto-assign team genders
+                              </button>
+                            )}
+                            {teams.some(t => !t.age_group) && (
+                              <button onClick={() => { autoAssignTeamAgeGroups(); setShowMoreMenu(false); }}
+                                className="w-full text-left px-4 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 flex items-center gap-2">
+                                ⚡ Auto-assign team age groups
                               </button>
                             )}
                             <button onClick={() => { setEmailModal({ targetType: 'all', targetIds: [], targetLabel: 'All Members' }); setShowMoreMenu(false); }}
