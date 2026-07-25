@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { ArrowLeft, User, Clock, Target, Calendar, CheckCircle2, TrendingUp, MessageSquare, Percent } from 'lucide-react';
+import { ArrowLeft, User, Clock, Target, Calendar, CheckCircle2, TrendingUp, MessageSquare, Percent, Download, Plus } from 'lucide-react';
 import { db } from '@/api/db';
 import { format } from 'date-fns';
+import { exportPlayerProfile } from '@/lib/exportHTML';
 
 const DEV_CATEGORIES = [
   'Ball Handling', 'Finishing', 'Shooting', 'Passing', 'Decision Making',
@@ -40,6 +41,11 @@ function niceMax(val) {
 export default function PlayerProfile({ player, teamName, onClose }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [playerNotes, setPlayerNotes] = useState([]);
+  const [showNoteForm, setShowNoteForm] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
 
   useEffect(() => { if (player) load(); }, [player]);
 
@@ -47,13 +53,16 @@ export default function PlayerProfile({ player, teamName, onClose }) {
     setLoading(true);
     try {
       const me = await db.auth.me().catch(() => null);
+      setCurrentUser(me);
 
       // Private sessions linked to this player
-      const [owned, teamSessions, attendanceRecords] = await Promise.all([
+      const [owned, teamSessions, attendanceRecords, fetchedPlayerNotes] = await Promise.all([
         me ? db.entities.Session.filter({ session_type: 'Private', owner_user_email: me.email }).catch(() => []) : Promise.resolve([]),
         player.team_id ? db.entities.Session.filter({ team_id: player.team_id, status: 'Completed' }).catch(() => []) : Promise.resolve([]),
         db.entities.AttendanceRecord.filter({ player_id: player.id }).catch(() => []),
+        db.entities.PlayerNote.filter({ player_id: player.id }, '-created_date', 50).catch(() => []),
       ]);
+      setPlayerNotes(fetchedPlayerNotes);
       const presentSessionIds = new Set(attendanceRecords.filter(r => r.status === 'Present' || r.status === 'Late').map(r => r.session_id));
       const attendanceTotal = attendanceRecords.length;
       const attendancePresentLike = attendanceRecords.filter(r => r.status === 'Present' || r.status === 'Late' || r.status === 'Excused').length;
@@ -143,6 +152,30 @@ export default function PlayerProfile({ player, teamName, onClose }) {
     setLoading(false);
   };
 
+  const saveNote = async () => {
+    if (!noteText.trim()) return;
+    setSavingNote(true);
+    try {
+      const created = await db.entities.PlayerNote.create({
+        player_id: player.id,
+        member_id: player.member_id || null,
+        team_id: player.team_id || null,
+        author_id: currentUser?.id || null,
+        note_type: 'General',
+        content: noteText.trim(),
+      });
+      setPlayerNotes(prev => [created, ...prev]);
+      setNoteText('');
+      setShowNoteForm(false);
+    } catch (e) {
+      alert('Could not save note: ' + e.message);
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleExport = () => exportPlayerProfile(player, teamName, data, playerNotes);
+
   const dob = player.date_of_birth;
   const age = dob ? Math.floor((Date.now() - new Date(dob)) / (365.25 * 24 * 3600 * 1000)) : null;
   const hasData = data && !data.error && (data.totalSessions > 0 || data.categories.length > 0);
@@ -151,9 +184,14 @@ export default function PlayerProfile({ player, teamName, onClose }) {
     <div className="bg-slate-50 min-h-full pb-10">
       {/* Header */}
       <div className="bg-gradient-to-br from-slate-900 to-slate-800 px-4 pt-4 pb-6 text-white">
-        <button onClick={onClose} className="flex items-center gap-1.5 text-slate-400 hover:text-white text-sm mb-4 transition-colors">
-          <ArrowLeft size={16} /> Players
-        </button>
+        <div className="flex items-center justify-between mb-4 pr-12">
+          <button onClick={onClose} className="flex items-center gap-1.5 text-slate-400 hover:text-white text-sm transition-colors">
+            <ArrowLeft size={16} /> Players
+          </button>
+          <button onClick={handleExport} className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-lg transition-colors">
+            <Download size={13} /> Export
+          </button>
+        </div>
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 bg-slate-700 rounded-2xl flex items-center justify-center text-white text-2xl font-black shrink-0">
             {player.jersey_number != null ? `#${player.jersey_number}` : <User size={24} />}
@@ -321,6 +359,52 @@ export default function PlayerProfile({ player, teamName, onClose }) {
             )}
           </>
         )}
+
+        {/* Coach Notes — explicit notes/comments a coach adds, distinct from the
+            derived "Coach Observations" timeline above (which comes from drill/
+            session notes typed during a session) */}
+        <Section title="Coach Notes" icon={<MessageSquare size={14} />}>
+          <div className="flex items-center justify-between mb-3 -mt-1">
+            <p className="text-xs text-slate-400">Comments and observations you add about this player</p>
+            {!showNoteForm && (
+              <button onClick={() => setShowNoteForm(true)}
+                className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 shrink-0 ml-2">
+                <Plus size={13} /> Add Note
+              </button>
+            )}
+          </div>
+          {showNoteForm && (
+            <div className="mb-3 space-y-2">
+              <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={3} autoFocus
+                placeholder="e.g. Great effort at training tonight, focus on left-hand dribble next session..."
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+              <div className="flex gap-2">
+                <button onClick={() => { setShowNoteForm(false); setNoteText(''); }}
+                  className="flex-1 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600">
+                  Cancel
+                </button>
+                <button onClick={saveNote} disabled={savingNote || !noteText.trim()}
+                  className="flex-1 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50">
+                  {savingNote ? 'Saving…' : 'Save Note'}
+                </button>
+              </div>
+            </div>
+          )}
+          {playerNotes.length === 0 ? (
+            <p className="text-sm text-slate-400 italic">No notes yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {playerNotes.map(n => (
+                <div key={n.id} className="border-t border-slate-100 pt-3 first:border-t-0 first:pt-0">
+                  <p className="text-xs text-slate-400 mb-0.5">
+                    {format(new Date(n.created_at || n.created_date), 'd MMM yyyy')}
+                  </p>
+                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{n.content || n.note}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
 
         {/* Player notes */}
         {player.notes && (

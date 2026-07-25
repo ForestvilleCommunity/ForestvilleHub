@@ -236,3 +236,79 @@ export function exportGamePlan(game, players = [], plays = [], teamName = '') {
 
   printWindow(`vs ${game.opponent}`, body);
 }
+
+// ─── PLAYER PROFILE EXPORT ────────────────────────────────────────────────────
+// `data` is the same shape PlayerProfile.jsx computes for its own display
+// (totalSessions/totalMins/goalsCompleted/attendanceRate/categories/topDrills/
+// notes); `playerNotes` is the separate player_notes table (explicit coach
+// notes), kept apart from the derived "Coach Observations" timeline.
+export function exportPlayerProfile(player, teamName, data, playerNotes = []) {
+  const age = player.date_of_birth
+    ? Math.floor((Date.now() - new Date(player.date_of_birth)) / (365.25 * 24 * 3600 * 1000))
+    : null;
+
+  let body = `
+<h1>${esc(player.name)}</h1>
+<div class="meta">
+  ${player.jersey_number != null ? `<span>#${esc(player.jersey_number)}</span>` : ''}
+  ${teamName ? `<span>👥 ${esc(teamName)}</span>` : ''}
+  ${age != null ? `<span>Age ${age}</span>` : ''}
+  ${player.position ? `<span><span class="badge badge-slate">${esc(player.position)}</span></span>` : ''}
+</div>
+
+<h2>Summary</h2>
+<div class="goal-row">
+  <div class="goal-cell"><div class="goal-label">Sessions</div><div class="goal-val">${data?.totalSessions ?? 0}</div></div>
+  <div class="goal-cell"><div class="goal-label">Training Time</div><div class="goal-val">${data?.totalMins ? `${data.totalMins} min` : '—'}</div></div>
+  <div class="goal-cell"><div class="goal-label">Goals Hit</div><div class="goal-val">${data?.goalsCompleted ?? 0}</div></div>
+  <div class="goal-cell"><div class="goal-label">Attendance</div><div class="goal-val">${data?.attendanceRate != null ? `${data.attendanceRate}%` : '—'}</div></div>
+</div>`;
+
+  if (data?.categories?.length) {
+    body += `<h2>Skill Focus</h2>`;
+    data.categories.forEach(cat => {
+      body += `<div class="row"><div style="flex:1;font-weight:600">${esc(cat.name)}</div><span class="row-meta">${cat.count}× practiced</span></div>`;
+    });
+  }
+
+  if (data?.topDrills?.length) {
+    body += `<h2>Most Practiced Drills</h2>`;
+    data.topDrills.forEach(d => {
+      const latest = d.points?.length ? d.points[d.points.length - 1] : null;
+      body += `<div class="row">
+        <div style="flex:1">
+          <div class="row-name">${esc(d.name)}</div>
+          ${latest ? `<div class="row-meta">Latest: ${esc(latest.result)} / ${esc(latest.target)}</div>` : ''}
+        </div>
+        <span class="badge badge-slate">${d.count}×</span>
+      </div>`;
+    });
+  }
+
+  if (data?.notes?.length) {
+    body += `<h2>Coach Observations</h2>`;
+    data.notes.forEach(n => {
+      body += `<div style="margin-bottom:10px">
+        <p class="row-meta">${n.date ? esc(n.date) : ''}${n.drill ? ` · ${esc(n.drill)}` : ''}</p>
+        <div class="pre">${esc(n.text)}</div>
+      </div>`;
+    });
+  }
+
+  if (playerNotes?.length) {
+    body += `<h2>Coach Notes</h2>`;
+    playerNotes.forEach(n => {
+      const date = n.created_at || n.created_date;
+      body += `<div style="margin-bottom:10px">
+        <p class="row-meta">${date ? esc(new Date(date).toLocaleDateString()) : ''}${n.note_type ? ` · ${esc(n.note_type)}` : ''}</p>
+        <div class="pre">${esc(n.content || n.note || '')}</div>
+      </div>`;
+    });
+  }
+
+  if (!data?.categories?.length && !data?.topDrills?.length && !data?.notes?.length && !playerNotes?.length) {
+    body += `<h2>Development</h2><p style="color:#94a3b8">No development work recorded yet.</p>`;
+  }
+
+  printWindow(player.name || 'Player', body);
+}
