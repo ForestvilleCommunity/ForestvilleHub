@@ -206,7 +206,7 @@ export default function AdminDashboard() {
   const [triggerTeamsEmail, setTriggerTeamsEmail] = useState(0);
   const [triggerMembersEmail, setTriggerMembersEmail] = useState(0);
   const [triggerCoachesEmail, setTriggerCoachesEmail] = useState(0);
-  const [trainingSubTab, setTrainingSubTab] = useState('overview');
+  const [trainingSubTab, setTrainingSubTab] = useState('schedule');
   const [triggerAddVenue, setTriggerAddVenue] = useState(0);
   const [triggerAddTraining, setTriggerAddTraining] = useState(0);
   const [triggerTrainingSettings, setTriggerTrainingSettings] = useState(0);

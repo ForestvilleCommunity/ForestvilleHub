@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { MapPin, Clock, CalendarClock, ClipboardPlus } from 'lucide-react';
+import { MapPin, Clock, CalendarClock, ClipboardPlus, Navigation } from 'lucide-react';
 import { db } from '@/api/db';
 import { getActiveTeam, subscribeActiveTeam } from '@/lib/activeTeam';
 import { getCurrentSeason } from '@/lib/season';
@@ -108,10 +108,22 @@ export default function Schedule() {
 
   const upcoming = allocations
     .flatMap(a => upcomingDatesForDay(a.day, WEEKS_AHEAD).map(date => ({ ...a, date })))
+    .map(a => {
+      if (!a.pause_start || !a.pause_end) return a;
+      const s = dateStr(a.date);
+      const inPauseRange = s >= a.pause_start && s <= a.pause_end;
+      // Within the paused range, an override venue means this occurrence was
+      // moved (not cancelled) — swap in the override venue/court for that date.
+      if (inPauseRange && a.override_venue_id) {
+        return { ...a, venue_id: a.override_venue_id, court_id: a.override_court_id || null, isMoved: true };
+      }
+      return a;
+    })
     .filter(a => {
       if (!a.pause_start || !a.pause_end) return true;
       const s = dateStr(a.date);
-      return s < a.pause_start || s > a.pause_end;
+      const inPauseRange = s >= a.pause_start && s <= a.pause_end;
+      return !inPauseRange || a.isMoved;
     })
     .sort((a, b) => a.date - b.date || (a.start_time || '').localeCompare(b.start_time || ''));
 
@@ -183,6 +195,10 @@ export default function Schedule() {
               const key = `${a.id}-${i}`;
               const existing = sessionsByDate[dateStr(a.date)];
               const isCreating = creatingKey === key;
+              const dirUrl = directionsUrl(venue);
+              const venueLabel = venue || court
+                ? `${venue?.name || 'No venue'}${court ? ` · ${court.name}` : ''}`
+                : 'No venue set';
               return (
                 <div key={key} className="px-4 py-3.5 flex items-center gap-3">
                   <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full shrink-0 whitespace-nowrap">
@@ -193,12 +209,28 @@ export default function Schedule() {
                       <Clock size={12} />{fmt12(a.start_time)}
                     </span>
                   )}
-                  <span className="flex items-center gap-1 text-sm text-slate-400 truncate flex-1 min-w-0">
-                    <MapPin size={12} className="shrink-0" />
-                    {venue || court
-                      ? `${venue?.name || 'No venue'}${court ? ` · ${court.name}` : ''}`
-                      : 'No venue set'}
-                  </span>
+                  {a.isMoved && (
+                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap">
+                      Moved
+                    </span>
+                  )}
+                  {dirUrl ? (
+                    <a
+                      href={dirUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-sm text-blue-500 hover:text-blue-700 hover:underline truncate flex-1 min-w-0"
+                      title="Get directions"
+                    >
+                      <Navigation size={12} className="shrink-0" />
+                      <span className="truncate">{venueLabel}</span>
+                    </a>
+                  ) : (
+                    <span className="flex items-center gap-1 text-sm text-slate-400 truncate flex-1 min-w-0">
+                      <MapPin size={12} className="shrink-0" />
+                      {venueLabel}
+                    </span>
+                  )}
                   <button
                     onClick={() => planSession(a, key)}
                     disabled={isCreating}

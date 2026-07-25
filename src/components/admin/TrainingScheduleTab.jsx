@@ -84,6 +84,15 @@ function isPaused(alloc) {
   return t >= alloc.pause_start && t <= alloc.pause_end;
 }
 
+// "Paused" with an override venue means the session still happens, just
+// somewhere else — distinct from a plain pause (cancelled, no session).
+function isMoved(alloc) {
+  return isPaused(alloc) && !!alloc.override_venue_id;
+}
+function isCancelled(alloc) {
+  return isPaused(alloc) && !alloc.override_venue_id;
+}
+
 function getSquadTeamIds(sq) {
   try { return JSON.parse(sq.team_ids || '[]'); } catch { return []; }
 }
@@ -274,7 +283,8 @@ function CourtGantt({ dayAllocs, allocInfo, onSelect, venueEntities }) {
                         const info      = allocInfo(a);
                         const narrow    = width < 80;
                         const conflict  = conflictingIds.has(a.id);
-                        const paused    = isPaused(a);
+                        const paused    = isCancelled(a);
+                        const moved     = isMoved(a);
                         return (
                           <button key={a.id} onClick={() => onSelect(a)}
                             style={{ position: 'absolute', left, top: 8, bottom: 8, width,
@@ -286,16 +296,21 @@ function CourtGantt({ dayAllocs, allocInfo, onSelect, venueEntities }) {
                                 <Pause size={9} className="text-amber-950" fill="currentColor" />
                               </div>
                             )}
+                            {moved && (
+                              <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-blue-400 flex items-center justify-center shadow">
+                                <MapPin size={9} className="text-blue-950" fill="currentColor" />
+                              </div>
+                            )}
                             {conflict && !narrow && (
                               <p className="text-[9px] font-black text-white/90 leading-none mb-0.5 uppercase tracking-wide">⚠ Overlap</p>
                             )}
                             <p className="font-bold text-[12px] leading-tight truncate">{info.name}</p>
                             {!narrow && (
                               <p className="text-[10px] text-white/80 mt-0.5 leading-tight truncate">
-                                {paused ? 'Paused' : `${fmt12(a.start_time)} – ${fmt12(a.end_time)}`}
+                                {paused ? 'Paused' : moved ? 'Moved venue' : `${fmt12(a.start_time)} – ${fmt12(a.end_time)}`}
                               </p>
                             )}
-                            {!narrow && !paused && info.ageGroup && (
+                            {!narrow && !paused && !moved && info.ageGroup && (
                               <p className="text-[10px] text-white/70 leading-tight truncate">{info.ageGroup}</p>
                             )}
                           </button>
@@ -373,7 +388,8 @@ function Timeline({ allocs, allocInfo, onSelect }) {
             const GAP = 3;
             const pct  = 100 / total;
             const short = height < 58;
-            const paused = isPaused(a);
+            const paused = isCancelled(a);
+            const moved = isMoved(a);
             return (
               <button key={a.id} onClick={() => onSelect(a)}
                 style={{ position:'absolute', top: top+2, height, left:`calc(${lane*pct}% + ${GAP}px)`, width:`calc(${pct}% - ${GAP*2}px)` }}
@@ -382,6 +398,11 @@ function Timeline({ allocs, allocInfo, onSelect }) {
                 {paused && (
                   <div className="absolute top-1 right-1 flex items-center gap-0.5 bg-amber-400 text-amber-950 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
                     <Pause size={8} fill="currentColor" /> Paused
+                  </div>
+                )}
+                {moved && (
+                  <div className="absolute top-1 right-1 flex items-center gap-0.5 bg-blue-400 text-blue-950 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                    <MapPin size={8} fill="currentColor" /> Moved
                   </div>
                 )}
                 <div className="pl-4 pr-2 pt-2 pb-2 h-full flex flex-col justify-center gap-0.5">
@@ -439,7 +460,8 @@ function ListView({ activeDays, byDay, allocInfo, onSelect, total, selectMode, s
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <p className="font-bold text-slate-900 text-sm truncate">{info.name}</p>
-                        {isPaused(a) && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">⏸ Paused</span>}
+                        {isCancelled(a) && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">⏸ Paused</span>}
+                        {isMoved(a) && <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full shrink-0">📍 Moved</span>}
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                         {timeStr && <span className="flex items-center gap-1 text-xs text-slate-500"><Clock size={11}/>{timeStr}</span>}
@@ -472,20 +494,29 @@ function SlotDetail({ alloc, info, venueEntities, courts, onClose, onProfileClic
     court_id: alloc.court_id || '',
     pause_start: alloc.pause_start || '',
     pause_end: alloc.pause_end || '',
+    override_venue_id: alloc.override_venue_id || '',
+    override_court_id: alloc.override_court_id || '',
   }));
   const [note, setNote] = useState('');
   const [deleteNote, setDeleteNote] = useState('');
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
-  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  // null | 'choose' | 'cancel' | 'move' — one quick-action button expands into
+  // a chooser instead of adding separate top-level buttons for each option.
+  const [adjustMode, setAdjustMode] = useState(null);
   const [skipNote, setSkipNote] = useState('');
   const [skipping, setSkipping] = useState(false);
+  const [moveVenueId, setMoveVenueId] = useState('');
+  const [moveCourtId, setMoveCourtId] = useState('');
+  const [moveNote, setMoveNote] = useState('');
+  const [moving, setMoving] = useState(false);
 
   const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const filteredCourts = courts.filter(c => !form.venue_id || c.venue_id === form.venue_id);
+  const filteredMoveCourts = courts.filter(c => !moveVenueId || c.venue_id === moveVenueId);
 
   const nextDate = nextOccurrenceDate(alloc.day);
-  const alreadySkippingNext = !!(alloc.pause_start && alloc.pause_end && nextDate >= alloc.pause_start && nextDate <= alloc.pause_end);
+  const nextDateInPause = !!(alloc.pause_start && alloc.pause_end && nextDate >= alloc.pause_start && nextDate <= alloc.pause_end);
 
   const confirmSkip = async () => {
     setSkipping(true);
@@ -499,13 +530,40 @@ function SlotDetail({ alloc, info, venueEntities, courts, onClose, onProfileClic
         court_id: alloc.court_id || '',
         pause_start: nextDate,
         pause_end: nextDate,
+        override_venue_id: '',
+        override_court_id: '',
         pending_note: skipNote.trim() || null,
       });
-      setShowSkipConfirm(false);
+      setAdjustMode(null);
     } catch (e) {
       setError(e.message || 'Failed to skip. Please try again.');
     } finally {
       setSkipping(false);
+    }
+  };
+
+  const confirmMove = async () => {
+    if (!moveVenueId) { setError('Pick a venue.'); return; }
+    setMoving(true);
+    setError('');
+    try {
+      await onSave(alloc.id, {
+        day: alloc.day,
+        start_time: alloc.start_time || '',
+        end_time: alloc.end_time || '',
+        venue_id: alloc.venue_id || '',
+        court_id: alloc.court_id || '',
+        pause_start: nextDate,
+        pause_end: nextDate,
+        override_venue_id: moveVenueId,
+        override_court_id: moveCourtId || '',
+        pending_note: moveNote.trim() || null,
+      });
+      setAdjustMode(null);
+    } catch (e) {
+      setError(e.message || 'Failed to move. Please try again.');
+    } finally {
+      setMoving(false);
     }
   };
 
@@ -591,9 +649,9 @@ function SlotDetail({ alloc, info, venueEntities, courts, onClose, onProfileClic
                 </div>
               </div>
               {(form.pause_start || form.pause_end) && (
-                <button onClick={() => { upd('pause_start', ''); upd('pause_end', ''); }}
+                <button onClick={() => { upd('pause_start', ''); upd('pause_end', ''); upd('override_venue_id', ''); upd('override_court_id', ''); }}
                   className="text-xs text-blue-600 hover:text-blue-700 font-semibold mt-2">
-                  Clear pause dates
+                  Clear pause/move dates
                 </button>
               )}
             </div>
@@ -629,14 +687,21 @@ function SlotDetail({ alloc, info, venueEntities, courts, onClose, onProfileClic
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             {info.ageGroup && <span className="text-white/80 text-xs font-semibold bg-white/20 px-2 py-0.5 rounded-full">{info.ageGroup}</span>}
             {duration     && <span className="text-white/80 text-xs font-semibold bg-white/20 px-2 py-0.5 rounded-full">{duration}</span>}
-            {isPaused(alloc) && <span className="text-xs font-bold bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full">⏸ Paused now</span>}
+            {isCancelled(alloc) && <span className="text-xs font-bold bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full">⏸ Paused now</span>}
+            {isMoved(alloc) && <span className="text-xs font-bold bg-blue-400 text-blue-950 px-2 py-0.5 rounded-full">📍 Moved now</span>}
           </div>
         </div>
         <div className="px-5 py-5 space-y-4">
           {(alloc.pause_start || alloc.pause_end) && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-800">
-              Paused from <strong>{alloc.pause_start || '—'}</strong> to <strong>{alloc.pause_end || '—'}</strong>
-            </div>
+            alloc.override_venue_id ? (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 text-xs text-blue-800">
+                Moved to <strong>{venueEntities.find(v => v.id === alloc.override_venue_id)?.name || 'a different venue'}</strong>{alloc.override_court_id ? <> · <strong>{courts.find(c => c.id === alloc.override_court_id)?.name}</strong></> : null} on <strong>{fmtDateNice(alloc.pause_start)}</strong>
+              </div>
+            ) : (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-800">
+                Paused from <strong>{alloc.pause_start || '—'}</strong> to <strong>{alloc.pause_end || '—'}</strong>
+              </div>
+            )
           )}
           {timeStr && (
             <div className="flex items-center gap-4">
@@ -663,25 +728,75 @@ function SlotDetail({ alloc, info, venueEntities, courts, onClose, onProfileClic
             View {info.isSquad ? 'Squad' : 'Team'} Profile →
           </button>
 
-          {nextDate && !alreadySkippingNext && !showSkipConfirm && (
-            <button onClick={() => setShowSkipConfirm(true)}
+          {nextDate && !nextDateInPause && !adjustMode && (
+            <button onClick={() => setAdjustMode('choose')}
               className="w-full py-3 border border-amber-200 bg-amber-50 rounded-2xl text-sm font-bold text-amber-700 hover:bg-amber-100 flex items-center justify-center gap-1.5">
-              <Pause size={14}/> Skip just {fmtDateNice(nextDate)}
+              <Pause size={14}/> Change {fmtDateNice(nextDate)}
             </button>
           )}
-          {showSkipConfirm && (
+
+          {adjustMode === 'choose' && (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2">
+              <p className="text-xs font-bold text-slate-600">
+                Just for {fmtDateNice(nextDate)} — every other week keeps running as normal.
+              </p>
+              <button onClick={() => setAdjustMode('cancel')}
+                className="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:border-amber-300 hover:bg-amber-50 flex items-center gap-2">
+                <Pause size={14} className="text-amber-600 shrink-0"/> Cancel this date
+              </button>
+              <button onClick={() => setAdjustMode('move')}
+                className="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:border-blue-300 hover:bg-blue-50 flex items-center gap-2">
+                <MapPin size={14} className="text-blue-600 shrink-0"/> Move to a different venue
+              </button>
+              <button onClick={() => setAdjustMode(null)} className="w-full py-1.5 text-xs text-slate-400 hover:text-slate-600 text-center">
+                Never mind
+              </button>
+            </div>
+          )}
+
+          {adjustMode === 'cancel' && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-2">
               <p className="text-xs font-bold text-amber-800">
-                Skips only {fmtDateNice(nextDate)} — every other week keeps running as normal, at the same day/time/venue.
+                Cancels only {fmtDateNice(nextDate)} — every other week keeps running as normal.
               </p>
               <textarea value={skipNote} onChange={e => setSkipNote(e.target.value)} rows={2}
                 placeholder="e.g. Venue unavailable this week (optional)"
                 className="w-full border border-amber-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white resize-none" />
               {error && <p className="text-sm text-red-600">{error}</p>}
               <div className="flex gap-2">
-                <button onClick={() => { setShowSkipConfirm(false); setError(''); }} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600">Cancel</button>
+                <button onClick={() => { setAdjustMode('choose'); setError(''); }} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600">Back</button>
                 <button onClick={confirmSkip} disabled={skipping} className="flex-1 py-2.5 bg-amber-600 text-white rounded-xl text-sm font-bold hover:bg-amber-700 disabled:opacity-50">
-                  {skipping ? 'Skipping…' : `Skip ${fmtDateNice(nextDate)}`}
+                  {skipping ? 'Cancelling…' : `Cancel ${fmtDateNice(nextDate)}`}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {adjustMode === 'move' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 space-y-2">
+              <p className="text-xs font-bold text-blue-800">
+                Moves only {fmtDateNice(nextDate)} to a different venue — every other week stays at {alloc.venue || 'the usual venue'}.
+              </p>
+              <select value={moveVenueId} onChange={e => { setMoveVenueId(e.target.value); setMoveCourtId(''); }}
+                className="w-full border border-blue-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+                <option value="">— Select venue —</option>
+                {venueEntities.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+              {filteredMoveCourts.length > 0 && (
+                <select value={moveCourtId} onChange={e => setMoveCourtId(e.target.value)}
+                  className="w-full border border-blue-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+                  <option value="">— No specific court —</option>
+                  {filteredMoveCourts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
+              <textarea value={moveNote} onChange={e => setMoveNote(e.target.value)} rows={2}
+                placeholder="e.g. Usual court is unavailable this week (optional)"
+                className="w-full border border-blue-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white resize-none" />
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <div className="flex gap-2">
+                <button onClick={() => { setAdjustMode('choose'); setError(''); }} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600">Back</button>
+                <button onClick={confirmMove} disabled={moving || !moveVenueId} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50">
+                  {moving ? 'Moving…' : `Move ${fmtDateNice(nextDate)}`}
                 </button>
               </div>
             </div>
@@ -849,6 +964,8 @@ export default function TrainingScheduleTab({ onProfileClick }) {
       court: selectedCourt?.name || '',
       pause_start: form.pause_start || null,
       pause_end: form.pause_end || null,
+      override_venue_id: form.override_venue_id || null,
+      override_court_id: form.override_court_id || null,
       pending_note: form.pending_note ?? null,
     };
     await db.entities.TrainingAllocation.update(id, payload);

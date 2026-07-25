@@ -45,7 +45,7 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 // every UI component reads/writes `day`; confirmed against the deployed DB).
 // pending_note is deliberately excluded here — setting a note by itself
 // shouldn't fire a notification, only ride along with an actual change below.
-const WATCHED_FIELDS = ['day', 'start_time', 'end_time', 'venue_id', 'court_id', 'pause_start', 'pause_end'];
+const WATCHED_FIELDS = ['day', 'start_time', 'end_time', 'venue_id', 'court_id', 'pause_start', 'pause_end', 'override_venue_id', 'override_court_id'];
 
 function resolveTeamIds(record: any, squadTeamIdsJson?: string | null) {
   const teamIds = new Set<string>();
@@ -157,22 +157,28 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  const [venueRes, courtRes, teamRes, squadRes] = await Promise.all([
+  const [venueRes, courtRes, teamRes, squadRes, overrideVenueRes, overrideCourtRes] = await Promise.all([
     record.venue_id ? supabase.from('venues').select('name').eq('id', record.venue_id).single() : Promise.resolve({ data: null }),
     record.court_id ? supabase.from('courts').select('name').eq('id', record.court_id).single() : Promise.resolve({ data: null }),
     record.team_id ? supabase.from('teams').select('team_name').eq('id', record.team_id).single() : Promise.resolve({ data: null }),
     record.squad_id ? supabase.from('squads').select('name, team_ids').eq('id', record.squad_id).single() : Promise.resolve({ data: null }),
+    record.override_venue_id ? supabase.from('venues').select('name').eq('id', record.override_venue_id).single() : Promise.resolve({ data: null }),
+    record.override_court_id ? supabase.from('courts').select('name').eq('id', record.override_court_id).single() : Promise.resolve({ data: null }),
   ]);
   const venueName = venueRes.data?.name;
   const courtName = courtRes.data?.name;
   const entityName = teamRes.data?.team_name || squadRes.data?.name || 'Your team';
+  const overrideVenueName = overrideVenueRes.data?.name;
+  const overrideCourtName = overrideCourtRes.data?.name;
 
   const whereText = `${venueName || 'a venue'}${courtName ? ` (${courtName})` : ''}`;
   const whenText = `${record.day || 'a day'}${record.start_time ? ` at ${record.start_time}` : ''}`;
 
   const wasPaused = !!(oldRecord.pause_start && oldRecord.pause_end);
   const isPausedNow = !!(record.pause_start && record.pause_end);
-  const pauseJustSet = isPausedNow && (record.pause_start !== oldRecord.pause_start || record.pause_end !== oldRecord.pause_end);
+  const isMovedNow = isPausedNow && !!record.override_venue_id;
+  const pauseJustSet = isPausedNow && !isMovedNow && (record.pause_start !== oldRecord.pause_start || record.pause_end !== oldRecord.pause_end);
+  const moveJustSet = isMovedNow && (record.pause_start !== oldRecord.pause_start || record.pause_end !== oldRecord.pause_end || record.override_venue_id !== oldRecord.override_venue_id || record.override_court_id !== oldRecord.override_court_id);
   const pauseJustCleared = wasPaused && !isPausedNow;
 
   let type: string, subject: string, message: string;
@@ -185,6 +191,11 @@ Deno.serve(async (req) => {
     type = 'schedule_removed';
     subject = 'Training cancelled';
     message = `The training slot for ${entityName} (${whenText}, ${whereText}) has been cancelled.`;
+  } else if (moveJustSet) {
+    type = 'schedule_moved';
+    subject = 'Training venue changed for one date';
+    const overrideWhere = `${overrideVenueName || 'a different venue'}${overrideCourtName ? ` (${overrideCourtName})` : ''}`;
+    message = `Training for ${entityName} (${whenText}) is moving to ${overrideWhere} on ${record.pause_start} only — every other week stays at ${whereText}.`;
   } else if (pauseJustSet) {
     type = 'schedule_paused';
     subject = 'Training paused';

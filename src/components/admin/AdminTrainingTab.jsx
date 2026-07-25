@@ -185,9 +185,9 @@ function TrainingSettingsModal({ onClose }) {
 }
 
 const SUB_TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'schedule', label: 'Schedule' },
-  { id: 'venues',   label: 'Venues' },
+  { id: 'schedule',   label: 'Schedule' },
+  { id: 'statistics', label: 'Statistics' },
+  { id: 'venues',     label: 'Venues' },
 ];
 
 function StatCard({ label, value, sub, color = 'bg-blue-50 text-blue-700' }) {
@@ -285,7 +285,7 @@ function CourtsTab() {
 }
 
 export default function AdminTrainingTab({ onProfileClick, resetTrigger, subTab: subTabProp, onSubTabChange, triggerAddVenue, triggerAddTraining, triggerSettings }) {
-  const [localSubTab, setLocalSubTab] = useState('overview');
+  const [localSubTab, setLocalSubTab] = useState('schedule');
   const subTab = subTabProp ?? localSubTab;
   const setSubTab = onSubTabChange ?? setLocalSubTab;
   const [overviewData, setOverviewData] = useState(null);
@@ -293,7 +293,7 @@ export default function AdminTrainingTab({ onProfileClick, resetTrigger, subTab:
   const [showSettings, setShowSettings] = useState(false);
   const [expandedDays, setExpandedDays] = useState({});
 
-  useEffect(() => { if (resetTrigger) { setSubTab('overview'); setShowAddTraining(false); setShowSettings(false); } }, [resetTrigger]);
+  useEffect(() => { if (resetTrigger) { setSubTab('schedule'); setShowAddTraining(false); setShowSettings(false); } }, [resetTrigger]);
   useEffect(() => { if (!triggerAddTraining) return; setShowAddTraining(true); }, [triggerAddTraining]);
   useEffect(() => { if (!triggerSettings) return; setShowSettings(true); }, [triggerSettings]);
 
@@ -309,7 +309,7 @@ export default function AdminTrainingTab({ onProfileClick, resetTrigger, subTab:
     });
   };
 
-  useEffect(() => { if (subTab === 'overview') loadOverview(); }, [subTab]);
+  useEffect(() => { if (subTab === 'statistics') loadOverview(); }, [subTab]);
 
   const todayName = DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1];
 
@@ -339,7 +339,11 @@ export default function AdminTrainingTab({ onProfileClick, resetTrigger, subTab:
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        {subTab === 'overview' && (
+        {subTab === 'schedule' && (
+          <TrainingScheduleTab onProfileClick={onProfileClick} />
+        )}
+
+        {subTab === 'statistics' && (
           <div className="flex-1 overflow-y-auto p-4 max-w-3xl mx-auto w-full space-y-4">
             {!overviewData ? <Spinner /> : (() => {
               const { venues, courts, allocations, teams, squads } = overviewData;
@@ -432,10 +436,6 @@ export default function AdminTrainingTab({ onProfileClick, resetTrigger, subTab:
               );
             })()}
           </div>
-        )}
-
-        {subTab === 'schedule' && (
-          <TrainingScheduleTab onProfileClick={onProfileClick} />
         )}
 
         {subTab === 'venues' && (
