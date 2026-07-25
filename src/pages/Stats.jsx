@@ -303,7 +303,6 @@ export default function Stats() {
       {/* Key metrics */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard icon={<Calendar size={18} className="text-blue-600" />} label="Sessions Completed" value={sessionsCompleted} sub={`of ${sessionsTotal} planned`} color="bg-blue-50" />
-        <StatCard icon={<Trophy size={18} className="text-amber-600" />} label="Games Recorded" value={gamesRecorded} color="bg-amber-50" />
         <StatCard icon={<Clock size={18} className="text-green-600" />} label="Training Minutes" value={totalMins} color="bg-green-50" />
         <StatCard icon={<Target size={18} className="text-purple-600" />} label="Drills Run" value={drillsDone} sub={drillsTotal > 0 ? `of ${drillsTotal} assigned` : undefined} color="bg-purple-50" />
       </div>
