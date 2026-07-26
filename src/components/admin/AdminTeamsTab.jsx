@@ -128,11 +128,13 @@ export default function AdminTeamsTab({ onProfileClick, resetTrigger, section: s
           await db.entities.Squad.update(sq.id, { team_ids: JSON.stringify([...tids, created.id]) });
         }
       }
+      let coachAssignFailed = false;
       if (newTeamCoachId) {
         const coach = users.find(u => u.id === newTeamCoachId);
-        if (coach) await db.entities.UserTeamAccess.create({ user_email: coach.email, team_id: created.id, role: 'Coach' }).catch(() => {});
+        if (coach) await db.entities.UserTeamAccess.create({ user_email: coach.email, team_id: created.id, role: 'Coach' }).catch(() => { coachAssignFailed = true; });
       }
       setForm(getEmptyForm()); setSquadId(''); setNewTeamCoachId(''); setShowAdd(false); load();
+      if (coachAssignFailed) alert('Team created, but assigning the coach failed — assign them manually from the team profile.');
     } catch (e) {
       alert('Error saving team: ' + e.message);
     } finally {

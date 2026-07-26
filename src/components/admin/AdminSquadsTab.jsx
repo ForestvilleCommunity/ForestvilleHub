@@ -124,14 +124,16 @@ export default function AdminSquadsTab({ onProfileClick, triggerAdd }) {
         await db.entities.Squad.update(editing.id, payload);
       } else {
         const created = await db.entities.Squad.create({ ...payload, status: 'Active' });
+        let coachAssignFailures = 0;
         if (newSquadCoachId && !editing) {
           const coach = users.find(u => u.id === newSquadCoachId);
           if (coach && created?.id) {
             for (const tid of selectedTeamIds) {
-              await db.entities.UserTeamAccess.create({ user_email: coach.email, team_id: tid, role: 'Coach' }).catch(() => {});
+              await db.entities.UserTeamAccess.create({ user_email: coach.email, team_id: tid, role: 'Coach' }).catch(() => { coachAssignFailures++; });
             }
           }
         }
+        if (coachAssignFailures > 0) alert(`Squad created, but assigning the coach to ${coachAssignFailures} team${coachAssignFailures !== 1 ? 's' : ''} failed — assign them manually.`);
       }
       setEditing(null); setForm(EMPTY_FORM); setSelectedTeamIds([]); setNewSquadCoachId('');
       setShowForm(false);

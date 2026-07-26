@@ -90,8 +90,13 @@ function AddTeamSquadModal({ onClose, onSaved }) {
         const sq = squads.find(s => s.id === teamSquadId);
         if (sq) { const ids = (() => { try { return JSON.parse(sq.team_ids || '[]'); } catch { return []; } })(); await db.entities.Squad.update(sq.id, { team_ids: JSON.stringify([...ids, created.id]) }); }
       }
-      if (teamCoachId) { const c = users.find(u => u.id === teamCoachId); if (c) await db.entities.UserTeamAccess.create({ user_email: c.email, team_id: created.id, role: 'Coach' }).catch(() => {}); }
+      let coachAssignFailed = false;
+      if (teamCoachId) {
+        const c = users.find(u => u.id === teamCoachId);
+        if (c) await db.entities.UserTeamAccess.create({ user_email: c.email, team_id: created.id, role: 'Coach' }).catch(() => { coachAssignFailed = true; });
+      }
       onSaved();
+      if (coachAssignFailed) alert('Team created, but assigning the coach failed — assign them manually from the team profile.');
     } catch (e) { alert('Error: ' + e.message); } finally { setSaving(false); }
   };
 
@@ -101,11 +106,13 @@ function AddTeamSquadModal({ onClose, onSaved }) {
     try {
       const me = await db.auth.me();
       const created = await db.entities.Squad.create({ ...squadForm, team_ids: JSON.stringify(selectedTeamIds), visibility: 'Club', owner_user_email: me.email, status: 'Active' });
+      let coachAssignFailures = 0;
       if (squadCoachId && selectedTeamIds.length > 0) {
         const c = users.find(u => u.id === squadCoachId);
-        if (c) for (const tid of selectedTeamIds) await db.entities.UserTeamAccess.create({ user_email: c.email, team_id: tid, role: 'Coach' }).catch(() => {});
+        if (c) for (const tid of selectedTeamIds) await db.entities.UserTeamAccess.create({ user_email: c.email, team_id: tid, role: 'Coach' }).catch(() => { coachAssignFailures++; });
       }
       onSaved();
+      if (coachAssignFailures > 0) alert(`Squad created, but assigning the coach to ${coachAssignFailures} team${coachAssignFailures !== 1 ? 's' : ''} failed — assign them manually.`);
     } catch (e) { alert('Error: ' + e.message); } finally { setSaving(false); }
   };
 

@@ -434,7 +434,11 @@ create table public.emails (
   status           text not null default 'Draft' check (status in ('Draft', 'Sending', 'Sent', 'Failed', 'Partial')),
   sent_by          uuid references auth.users(id),
   sent_at          timestamptz,
-  created_at       timestamptz not null default now()
+  created_at       timestamptz not null default now(),
+  -- "Send as yourself" customization — from_name changes the display name,
+  -- reply_to can be any address (see add_email_sender_customization.sql).
+  from_name        text,
+  reply_to         text
 );
 
 -- recipient_name/recipient_email are snapshotted — if a parent's email
@@ -459,6 +463,14 @@ create index on public.emails (status);
 grant select, insert, update, delete on public.email_templates to authenticated;
 grant select, insert, update, delete on public.emails to authenticated;
 grant select, insert, update, delete on public.email_recipients to authenticated;
+
+-- The send-email Edge Function connects as service_role (bypasses RLS by
+-- design) — without this grant it can't even read the row it was told to
+-- send, surfacing as a misleading "Email not found" 404 instead of the real
+-- "permission denied for table emails" (see grant_service_role_email_tables.sql).
+grant all on public.email_templates  to service_role;
+grant all on public.emails           to service_role;
+grant all on public.email_recipients to service_role;
 
 -- ============================================================
 -- NOTIFICATIONS

@@ -112,8 +112,13 @@ create policy "Admins can manage courts"
 -- ============================================================
 -- SQUADS  (admin write, all authenticated read)
 -- ============================================================
+-- No coach-facing flow currently creates a Private squad (every Squad.create()
+-- call in the app hardcodes visibility: 'Club'), so this was latent, not an
+-- active leak — tightened for consistency with teams/drills visibility scoping.
 create policy "Authenticated users can view squads"
-  on public.squads for select using (auth.uid() is not null);
+  on public.squads for select using (
+    visibility = 'Club' or public.is_admin() or created_by = auth.uid()
+  );
 
 create policy "Admins can manage squads"
   on public.squads for all using (public.is_admin());
@@ -243,17 +248,20 @@ create policy "Users can view own drills, club drills on their teams, and templa
 create policy "Coaches can create drills"
   on public.drills for insert with check (auth.uid() is not null);
 
--- Coaches can only edit/delete their own Private drills; Club drills are admin-managed.
+-- Coaches can only edit/delete their own Private drills; Club/Template drills are admin-managed.
+-- is_admin() must stay nested under Club/Template here — never OR'd at the top level,
+-- or an admin could edit/delete any coach's Private drill (same class of bug as the
+-- SELECT-policy regression fixed in fix_drills_admin_privacy_regression.sql).
 create policy "Owners and admins can update drills"
   on public.drills for update using (
-    public.is_admin()
-    or (owner_id = auth.uid() and visibility = 'Private')
+    (owner_id = auth.uid() and visibility = 'Private')
+    or (public.is_admin() and visibility in ('Club', 'Template'))
   );
 
 create policy "Owners and admins can delete drills"
   on public.drills for delete using (
-    public.is_admin()
-    or (owner_id = auth.uid() and visibility = 'Private')
+    (owner_id = auth.uid() and visibility = 'Private')
+    or (public.is_admin() and visibility in ('Club', 'Template'))
   );
 
 -- ============================================================

@@ -79,6 +79,7 @@ export default function SessionBuilder() {
   const initialSnapshotRef = useRef(null);
   const justSavedRef = useRef(false);
   const autoSaveTimerRef = useRef(null);
+  const autoSaveInFlightRef = useRef(null);
 
   useEffect(() => {
     db.auth.me().then(async (u) => {
@@ -259,9 +260,9 @@ export default function SessionBuilder() {
 
   const syncSessionDrills = async (sid) => {
     const existing = await db.entities.SessionDrill.filter({ session_id: sid }).catch(() => []);
-    await Promise.all(existing.map(sd => db.entities.SessionDrill.delete(sd.id).catch(() => {})));
+    const deleteResults = await Promise.allSettled(existing.map(sd => db.entities.SessionDrill.delete(sd.id)));
     const validDrills = sessionDrills.filter(sd => sd.drill?.id);
-    await Promise.all(validDrills.map((sd, i) => db.entities.SessionDrill.create({
+    const createResults = await Promise.allSettled(validDrills.map((sd, i) => db.entities.SessionDrill.create({
       session_id: sid,
       drill_id: sd.drill.id,
       block_id: sd.block_id,
@@ -272,7 +273,12 @@ export default function SessionBuilder() {
       goal_target: sd.goal_target,
       goal_result: sd.goal_result,
       status: sd.status,
-    }).catch(() => {})));
+    })));
+    // Surface any failure instead of silently reporting the save as successful
+    // when the drill list didn't actually sync.
+    if ([...deleteResults, ...createResults].some(r => r.status === 'rejected')) {
+      throw new Error('Some session drills failed to save');
+    }
   };
 
   const handleSave = async () => {
@@ -292,6 +298,9 @@ export default function SessionBuilder() {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     setSaving(true);
     try {
+      // Wait out any autosave already mid-flight so its delete-then-recreate of
+      // session_drills can't race against this save's own syncSessionDrills call.
+      if (autoSaveInFlightRef.current) await autoSaveInFlightRef.current;
       const payload = buildPayload();
       let sid = sessionId;
       if (isEdit) {
@@ -319,15 +328,26 @@ export default function SessionBuilder() {
   // Save button and the beforeunload warning as the backstop.
   const autoSaveNow = async () => {
     if (!isEdit || !form.session_name?.trim() || !form.date || saving) return;
+    // Non-reentrant: if a prior autosave is still running, skip this tick — the
+    // debounce effect re-fires on the next edit, so nothing gets permanently
+    // missed, and this avoids two overlapping syncSessionDrills calls racing
+    // their delete-then-recreate against each other.
+    if (autoSaveInFlightRef.current) return;
     setAutoSaveStatus('saving');
-    try {
-      await db.entities.Session.update(sessionId, buildPayload());
-      await syncSessionDrills(sessionId);
-      initialSnapshotRef.current = JSON.stringify({ form, sessionDrills, sessionBlocks, selectedPrivatePlayers });
-      setAutoSaveStatus('saved');
-    } catch {
-      setAutoSaveStatus('idle');
-    }
+    const run = (async () => {
+      try {
+        await db.entities.Session.update(sessionId, buildPayload());
+        await syncSessionDrills(sessionId);
+        initialSnapshotRef.current = JSON.stringify({ form, sessionDrills, sessionBlocks, selectedPrivatePlayers });
+        setAutoSaveStatus('saved');
+      } catch {
+        setAutoSaveStatus('idle');
+      } finally {
+        autoSaveInFlightRef.current = null;
+      }
+    })();
+    autoSaveInFlightRef.current = run;
+    await run;
   };
 
   useEffect(() => {

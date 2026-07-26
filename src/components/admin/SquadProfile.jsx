@@ -96,13 +96,13 @@ export default function SquadProfile({
     if (activeTab === 'Development') {
       const teamIds = (squadTeams || []).map(t => t.id);
       if (att === null && teamIds.length > 0) {
-        db.entities.AttendanceRecord.list('-date', 1000)
-          .then(all => setAtt(all.filter(r => teamIds.includes(r.team_id))))
+        db.entities.AttendanceRecord.filterAll({ team_id: teamIds }, '-date')
+          .then(setAtt)
           .catch(() => setAtt([]));
       }
       if (cr === null && teamIds.length > 0) {
-        db.entities.ChallengeResult.list('-created_date', 200)
-          .then(all => setCr(all.filter(r => teamIds.includes(r.team_id))))
+        db.entities.ChallengeResult.filterAll({ team_id: teamIds }, '-created_date')
+          .then(setCr)
           .catch(() => setCr([]));
       }
     }

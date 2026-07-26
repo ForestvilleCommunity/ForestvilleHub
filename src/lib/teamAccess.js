@@ -10,7 +10,7 @@ export async function getAccessibleTeams(user) {
 
   if (user.role === 'admin') {
     const [clubTeams, ownPrivate] = await Promise.all([
-      db.entities.Team.filter({ visibility: 'Club' }, '-created_date', 1000).catch(() => []),
+      db.entities.Team.filterAll({ visibility: 'Club' }, '-created_date').catch(() => []),
       db.entities.Team.filter({ owner_id: user.id, visibility: 'Private' }).catch(() => []),
     ]);
     const seen = new Set();
@@ -23,9 +23,9 @@ export async function getAccessibleTeams(user) {
   ]);
 
   const assignedIds = [...new Set(accessRecords.map(r => r.team_id).filter(Boolean))];
-  const assignedTeams = (
-    await Promise.all(assignedIds.map(id => db.entities.Team.get(id).catch(() => null)))
-  ).filter(Boolean);
+  const assignedTeams = assignedIds.length
+    ? await db.entities.Team.filter({ id: assignedIds }).catch(() => [])
+    : [];
 
   const merged = [...assignedTeams];
   ownTeams.forEach(t => {
@@ -49,8 +49,5 @@ export async function getAccessiblePlayers(user, activeTeamId = null) {
     ? [activeTeamId]
     : accessibleIds;
 
-  const results = await Promise.all(
-    targetIds.map(id => db.entities.Player.filter({ team_id: id }, '-created_date').catch(() => []))
-  );
-  return results.flat();
+  return db.entities.Player.filter({ team_id: targetIds }, '-created_date').catch(() => []);
 }

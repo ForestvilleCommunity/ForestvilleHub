@@ -277,7 +277,10 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
       if (existingMember) toReconcile.push({ row, existingMember });
       else toCreate.push(row);
 
-      if (teamName && !existingTeams.some(t => t.team_name?.toLowerCase() === teamName.toLowerCase())) {
+      // Only match against Active teams — an Archived/Inactive team from a
+      // past season sharing this name should get a fresh team, not silently
+      // reuse the stale one without reactivating it.
+      if (teamName && !existingTeams.some(t => t.team_name?.toLowerCase() === teamName.toLowerCase() && t.status === 'Active')) {
         newTeamNames.add(teamName);
       }
       if (squadName) newSquadNames.add(squadName);
@@ -430,8 +433,10 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
       };
     });
 
+    let reconcileFailures = 0;
     for (const { existingMember, memberUpdate } of reconcileMeta) {
-      await db.entities.Member.update(existingMember.id, memberUpdate).catch(() => {});
+      try { await db.entities.Member.update(existingMember.id, memberUpdate); }
+      catch { reconcileFailures++; }
     }
 
     // Fetch every reconciled member's existing Player row(s) in one batched
@@ -447,19 +452,21 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
     for (const { existingMember, teamId, jersey, dob } of reconcileMeta) {
       if (!teamId) { reconciled++; continue; } // member updated above; no team on this row to (re)assign
       const playerRow = (playersByMemberId[existingMember.id] || [])[0];
-      if (playerRow) {
-        await db.entities.Player.update(playerRow.id, {
-          team_id: teamId, status: 'Active',
-          ...(jersey ? { jersey_number: jersey } : {}),
-          ...(dob ? { date_of_birth: dob } : {}),
-        }).catch(() => {});
-      } else {
-        await db.entities.Player.create({
-          name: existingMember.name, team_id: teamId, member_id: existingMember.id,
-          visibility: 'Club', status: 'Active', owner_id: me.id, date_of_birth: dob, jersey_number: jersey,
-        }).catch(() => {});
-      }
-      reconciled++;
+      try {
+        if (playerRow) {
+          await db.entities.Player.update(playerRow.id, {
+            team_id: teamId, status: 'Active',
+            ...(jersey ? { jersey_number: jersey } : {}),
+            ...(dob ? { date_of_birth: dob } : {}),
+          });
+        } else {
+          await db.entities.Player.create({
+            name: existingMember.name, team_id: teamId, member_id: existingMember.id,
+            visibility: 'Club', status: 'Active', owner_id: me.id, date_of_birth: dob, jersey_number: jersey,
+          });
+        }
+        reconciled++;
+      } catch { reconcileFailures++; }
     }
 
     // Link teams to squads
@@ -476,7 +483,7 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
     }
 
     setImporting(false);
-    const resultData = { created, reconciled, newTeams: summary.newTeams.length, newSquads: squadsToCreate.length, createdMemberIds, createdPlayerIds };
+    const resultData = { created, reconciled, reconcileFailures, newTeams: summary.newTeams.length, newSquads: squadsToCreate.length, createdMemberIds, createdPlayerIds };
     setResult(resultData);
     // Save to import history in localStorage (keep last 10)
     try {
@@ -646,6 +653,11 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
                   </p>
                   {result.reconciled > 0 && (
                     <p className="text-xs text-slate-400 mt-1">Note: undo below only removes newly created records — returning members' updated info isn't reverted.</p>
+                  )}
+                  {result.reconcileFailures > 0 && (
+                    <p className="text-xs text-red-600 font-semibold mt-2">
+                      {result.reconcileFailures} returning member update{result.reconcileFailures !== 1 ? 's' : ''} failed to save — re-run the import to retry, or check those rows manually.
+                    </p>
                   )}
                 </div>
                 <button onClick={onClose} className="px-8 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700">Done</button>

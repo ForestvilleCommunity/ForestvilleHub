@@ -91,9 +91,9 @@ export default function Stats() {
       if (teamIds.length === 0) { setSummary({ noTeams: true }); setLoading(false); return; }
 
       const [teamSessions, ownSessions, allGames] = await Promise.all([
-        Promise.all(teamIds.map(tid => db.entities.Session.filter({ team_id: tid }))).then(r => r.flat()),
+        db.entities.Session.filter({ team_id: teamIds }),
         activeTeamSnap ? Promise.resolve([]) : db.entities.Session.filter({ owner_id: user.id }, '-date').catch(() => []),
-        Promise.all(teamIds.map(tid => db.entities.Game.filter({ team_id: tid }))).then(r => r.flat()),
+        db.entities.Game.filter({ team_id: teamIds }),
       ]);
       const allSessions = [...teamSessions];
       ownSessions.forEach(s => { if (!allSessions.find(m => m.id === s.id)) allSessions.push(s); });
@@ -102,8 +102,7 @@ export default function Stats() {
 
       let allSessionDrills = [];
       if (completedSessions.length > 0) {
-        const chunks = await Promise.all(completedSessions.map(s => db.entities.SessionDrill.filter({ session_id: s.id })));
-        allSessionDrills = chunks.flat();
+        allSessionDrills = await db.entities.SessionDrill.filter({ session_id: completedSessions.map(s => s.id) });
       }
 
       const totalMins = allSessionDrills.reduce((sum, sd) => sum + (Number(sd.duration) || 0), 0);
@@ -111,8 +110,8 @@ export default function Stats() {
       let drillMap = {};
       if (allSessionDrills.length > 0) {
         const drillIds = [...new Set(allSessionDrills.map(sd => sd.drill_id).filter(Boolean))];
-        const drills = await Promise.all(drillIds.map(id => db.entities.Drill.get(id).catch(() => null)));
-        drills.filter(Boolean).forEach(d => { drillMap[d.id] = d; });
+        const drills = await db.entities.Drill.filter({ id: drillIds }).catch(() => []);
+        drills.forEach(d => { drillMap[d.id] = d; });
       }
 
       const drillThemes = {};

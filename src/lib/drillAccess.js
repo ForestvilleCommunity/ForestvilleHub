@@ -40,8 +40,8 @@ export async function getAccessibleDrills(user) {
 
 export function canEditDrill(drill, user) {
   if (!user || !drill) return false;
-  if (user.role === 'admin') return true;
-  // Club and Template drills are admin-controlled — coaches can only edit their own Private drills
+  // Admins manage the Club/Template library, but never another coach's Private drill.
+  if (user.role === 'admin') return drill.visibility === 'Club' || drill.visibility === 'Template';
   if (drill.visibility === 'Club' || drill.visibility === 'Template') return false;
   return drill.owner_id === user.id;
 }
