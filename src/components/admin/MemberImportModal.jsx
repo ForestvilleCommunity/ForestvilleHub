@@ -258,14 +258,21 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
       if (!name) { invalid.push(row); return; }
 
       // Same person returning for a new season — matched by name+DOB or by
-      // email. Revolutionise has no persistent ID across seasons, so this is
-      // the most reliable signal available; reconciled below instead of
+      // name+email. Revolutionise has no persistent ID across seasons, so this
+      // is the most reliable signal available; reconciled below instead of
       // skipped, so their new team/season info actually lands without
       // manually redoing it for every returning player.
-      const existingMember = existingMembers.find(m =>
-        (m.name?.toLowerCase() === name.toLowerCase() && dob && m.date_of_birth === dob) ||
-        (email && m.email?.toLowerCase() === email.toLowerCase() && email !== '')
-      );
+      // Name is required on every branch: families often reuse one parent
+      // email across multiple kids' registrations, so an email-only match
+      // (with no name check) could reconcile a sibling's row onto the wrong
+      // existing member and overwrite their data.
+      const existingMember = existingMembers.find(m => {
+        const nameMatch = m.name?.toLowerCase() === name.toLowerCase();
+        if (!nameMatch) return false;
+        const dobMatch = dob && m.date_of_birth === dob;
+        const emailMatch = email && email !== '' && m.email?.toLowerCase() === email.toLowerCase();
+        return dobMatch || emailMatch;
+      });
 
       if (existingMember) toReconcile.push({ row, existingMember });
       else toCreate.push(row);
