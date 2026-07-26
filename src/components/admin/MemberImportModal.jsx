@@ -167,6 +167,39 @@ function autoMap(headers) {
   return map;
 }
 
+// Shared by both the create and reconcile paths, so a returning member's
+// refreshed contact/medical/jersey info is built the exact same way as a
+// brand-new one — the only difference is whether it lands in an insert or
+// an update.
+function buildMemberFieldsFromRow(row, getVal) {
+  const memberData = {};
+  const memberFields = ['date_of_birth','gender','email','phone','address','parent_name','parent_phone',
+    'parent_email','school','medical_conditions','medication','other_conditions','notes','jersey_number'];
+  memberFields.forEach(field => {
+    let v = getVal(row, field);
+    if (!v) return;
+    if (field === 'date_of_birth') v = normaliseDate(v);
+    if (field === 'phone' || field === 'parent_phone') v = normalisePhone(v);
+    memberData[field] = v;
+  });
+
+  const extraParts = [];
+  const prevClub = getVal(row, 'previous_club');
+  if (prevClub) extraParts.push(`Previous club: ${prevClub}`);
+  const regOn = getVal(row, 'registered_on');
+  if (regOn) extraParts.push(`Registered on: ${normaliseDate(regOn)}`);
+  const ageGroup = getVal(row, 'age_group');
+  if (ageGroup) extraParts.push(`Age group: ${ageGroup}`);
+  const volunteer = getVal(row, 'volunteer_role');
+  if (volunteer) extraParts.push(`Volunteer: ${volunteer}`);
+  const parentOcc = getVal(row, 'parent_occupation');
+  if (parentOcc) extraParts.push(`Parents occupation: ${parentOcc}`);
+  if (extraParts.length) {
+    memberData.notes = [memberData.notes, ...extraParts].filter(Boolean).join('\n');
+  }
+  return memberData;
+}
+
 export default function MemberImportModal({ onClose, existingTeams = [], existingMembers = [], onImported }) {
   const [step, setStep] = useState('upload');
   const [parsed, setParsed] = useState(null);
@@ -213,7 +246,7 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
     if (!parsed) return null;
     const newTeamNames = new Set();
     const newSquadNames = new Set();
-    const toCreate = [], duplicates = [], invalid = [];
+    const toCreate = [], toReconcile = [], invalid = [];
 
     parsed.rows.forEach(row => {
       const name = reformatName(getVal(row, 'name'));
@@ -224,12 +257,17 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
 
       if (!name) { invalid.push(row); return; }
 
-      const isDup = existingMembers.some(m =>
+      // Same person returning for a new season — matched by name+DOB or by
+      // email. Revolutionise has no persistent ID across seasons, so this is
+      // the most reliable signal available; reconciled below instead of
+      // skipped, so their new team/season info actually lands without
+      // manually redoing it for every returning player.
+      const existingMember = existingMembers.find(m =>
         (m.name?.toLowerCase() === name.toLowerCase() && dob && m.date_of_birth === dob) ||
         (email && m.email?.toLowerCase() === email.toLowerCase() && email !== '')
       );
 
-      if (isDup) duplicates.push(row);
+      if (existingMember) toReconcile.push({ row, existingMember });
       else toCreate.push(row);
 
       if (teamName && !existingTeams.some(t => t.team_name?.toLowerCase() === teamName.toLowerCase())) {
@@ -238,7 +276,7 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
       if (squadName) newSquadNames.add(squadName);
     });
 
-    return { toCreate, duplicates, invalid, newTeams: [...newTeamNames], newSquads: [...newSquadNames] };
+    return { toCreate, toReconcile, invalid, newTeams: [...newTeamNames], newSquads: [...newSquadNames] };
   };
 
   const doImport = async () => {
@@ -311,33 +349,7 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
 
       if (teamId && squadName) teamSquadLinks[teamId] = squadName;
 
-      const memberData = { name, visibility: 'Club', status: 'Active', owner_user_email: me.email, owner_id: me.id };
-      const memberFields = ['date_of_birth','gender','email','phone','address','parent_name','parent_phone',
-        'parent_email','school','medical_conditions','medication','other_conditions','notes','jersey_number'];
-      memberFields.forEach(field => {
-        let v = getVal(row, field);
-        if (!v) return;
-        if (field === 'date_of_birth') v = normaliseDate(v);
-        if (field === 'phone' || field === 'parent_phone') v = normalisePhone(v);
-        memberData[field] = v;
-      });
-
-      // Extra fields — append to notes
-      const extraParts = [];
-      const prevClub = getVal(row, 'previous_club');
-      if (prevClub) extraParts.push(`Previous club: ${prevClub}`);
-      const regOn = getVal(row, 'registered_on');
-      if (regOn) extraParts.push(`Registered on: ${normaliseDate(regOn)}`);
-      const ageGroup = getVal(row, 'age_group');
-      if (ageGroup) extraParts.push(`Age group: ${ageGroup}`);
-      const volunteer = getVal(row, 'volunteer_role');
-      if (volunteer) extraParts.push(`Volunteer: ${volunteer}`);
-      const parentOcc = getVal(row, 'parent_occupation');
-      if (parentOcc) extraParts.push(`Parents occupation: ${parentOcc}`);
-      if (extraParts.length) {
-        memberData.notes = [memberData.notes, ...extraParts].filter(Boolean).join('\n');
-      }
-
+      const memberData = { name, visibility: 'Club', status: 'Active', owner_user_email: me.email, owner_id: me.id, ...buildMemberFieldsFromRow(row, getVal) };
       if (teamId) memberData.team_id = teamId;
       memberPayloads.push(memberData);
       memberRowMeta.push({
@@ -390,6 +402,59 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
     }
     const createdPlayerIds = createdPlayers.map(p => p.id);
 
+    // Reconcile returning members — matched by name+DOB or email above.
+    // Update their existing Member row with this season's fresh info, then
+    // either move/reactivate their existing Player row or create one if they
+    // never had one, so session/attendance/notes history stays attached to
+    // one continuous player record across seasons instead of forking into a
+    // brand-new player row every year.
+    setImportLog(`Reconciling ${summary.toReconcile.length} returning member${summary.toReconcile.length !== 1 ? 's' : ''}…`);
+    const reconcileMeta = summary.toReconcile.map(({ row, existingMember }) => {
+      const teamName = getVal(row, 'team_name');
+      const squadName = getVal(row, 'squad_name');
+      const teamId = teamName ? teamCache[teamName.toLowerCase()] : '';
+      if (teamId && squadName) teamSquadLinks[teamId] = squadName;
+      const memberUpdate = { status: 'Active', ...buildMemberFieldsFromRow(row, getVal) };
+      if (teamId) memberUpdate.team_id = teamId;
+      return {
+        existingMember, memberUpdate, teamId,
+        jersey: getVal(row, 'jersey_number') || undefined,
+        dob: normaliseDate(getVal(row, 'date_of_birth')) || undefined,
+      };
+    });
+
+    for (const { existingMember, memberUpdate } of reconcileMeta) {
+      await db.entities.Member.update(existingMember.id, memberUpdate).catch(() => {});
+    }
+
+    // Fetch every reconciled member's existing Player row(s) in one batched
+    // query rather than one query per member.
+    const reconciledMemberIds = reconcileMeta.map(r => r.existingMember.id);
+    const existingPlayersForReconciled = reconciledMemberIds.length
+      ? await db.entities.Player.filter({ member_id: reconciledMemberIds }).catch(() => [])
+      : [];
+    const playersByMemberId = {};
+    existingPlayersForReconciled.forEach(p => { (playersByMemberId[p.member_id] = playersByMemberId[p.member_id] || []).push(p); });
+
+    let reconciled = 0;
+    for (const { existingMember, teamId, jersey, dob } of reconcileMeta) {
+      if (!teamId) { reconciled++; continue; } // member updated above; no team on this row to (re)assign
+      const playerRow = (playersByMemberId[existingMember.id] || [])[0];
+      if (playerRow) {
+        await db.entities.Player.update(playerRow.id, {
+          team_id: teamId, status: 'Active',
+          ...(jersey ? { jersey_number: jersey } : {}),
+          ...(dob ? { date_of_birth: dob } : {}),
+        }).catch(() => {});
+      } else {
+        await db.entities.Player.create({
+          name: existingMember.name, team_id: teamId, member_id: existingMember.id,
+          visibility: 'Club', status: 'Active', owner_id: me.id, date_of_birth: dob, jersey_number: jersey,
+        }).catch(() => {});
+      }
+      reconciled++;
+    }
+
     // Link teams to squads
     setImportLog('Linking teams to squads…');
     for (const [teamId, squadName] of Object.entries(teamSquadLinks)) {
@@ -404,7 +469,7 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
     }
 
     setImporting(false);
-    const resultData = { created, duplicates: summary.duplicates.length, newTeams: summary.newTeams.length, newSquads: squadsToCreate.length, createdMemberIds, createdPlayerIds };
+    const resultData = { created, reconciled, newTeams: summary.newTeams.length, newSquads: squadsToCreate.length, createdMemberIds, createdPlayerIds };
     setResult(resultData);
     // Save to import history in localStorage (keep last 10)
     try {
@@ -451,8 +516,8 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
             <div className="flex-1 overflow-y-auto">
               <div className="grid grid-cols-2 gap-3 p-4">
                 {[
-                  { label: 'To Create', value: summary.toCreate.length, color: 'bg-green-50 text-green-800' },
-                  { label: 'Possible Duplicates', value: summary.duplicates.length, color: 'bg-amber-50 text-amber-800' },
+                  { label: 'New Members', value: summary.toCreate.length, color: 'bg-green-50 text-green-800' },
+                  { label: 'Returning Members', value: summary.toReconcile.length, color: 'bg-sky-50 text-sky-800' },
                   { label: 'New Teams', value: summary.newTeams.length, color: 'bg-blue-50 text-blue-800' },
                   { label: 'New Squads', value: summary.newSquads.length, color: 'bg-indigo-50 text-indigo-800' },
                 ].map(s => (
@@ -476,12 +541,12 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
                 </div>
               )}
 
-              {summary.duplicates.length > 0 && (
-                <div className="mx-4 mb-3 bg-amber-50 border border-amber-100 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-amber-700 mb-1">⚠️ Possible duplicates (will be skipped):</p>
-                  <p className="text-xs text-amber-600">
-                    {summary.duplicates.slice(0, 5).map(r => colMap.name ? r[colMap.name] : '?').join(', ')}
-                    {summary.duplicates.length > 5 ? ` +${summary.duplicates.length - 5} more` : ''}
+              {summary.toReconcile.length > 0 && (
+                <div className="mx-4 mb-3 bg-sky-50 border border-sky-100 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-sky-700 mb-1">🔄 Returning members — matched by name+DOB or email, will be updated to this season's team and reactivated (not created again):</p>
+                  <p className="text-xs text-sky-600">
+                    {summary.toReconcile.slice(0, 5).map(({ row: r }) => colMap.name ? r[colMap.name] : '?').join(', ')}
+                    {summary.toReconcile.length > 5 ? ` +${summary.toReconcile.length - 5} more` : ''}
                   </p>
                 </div>
               )}
@@ -538,9 +603,11 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
 
             <div className="px-4 py-4 border-t border-slate-100 flex gap-3 shrink-0">
               <button onClick={() => setStep('upload')} className="px-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 font-semibold">← Back</button>
-              <button onClick={doImport} disabled={importing || summary.toCreate.length === 0}
+              <button onClick={doImport} disabled={importing || (summary.toCreate.length === 0 && summary.toReconcile.length === 0)}
                 className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm disabled:opacity-50">
-                {importing ? importLog || 'Importing…' : `Import ${summary.toCreate.length} Members`}
+                {importing ? importLog || 'Importing…' : summary.toReconcile.length > 0
+                  ? `Import ${summary.toCreate.length} new, update ${summary.toReconcile.length}`
+                  : `Import ${summary.toCreate.length} Members`}
               </button>
             </div>
           </>
@@ -568,8 +635,11 @@ export default function MemberImportModal({ onClose, existingTeams = [], existin
                     {result.created} member{result.created !== 1 ? 's' : ''} created
                     {result.newTeams > 0 ? `, ${result.newTeams} new team${result.newTeams !== 1 ? 's' : ''}` : ''}
                     {result.newSquads > 0 ? `, ${result.newSquads} new squad${result.newSquads !== 1 ? 's' : ''}` : ''}
-                    {result.duplicates > 0 ? `, ${result.duplicates} duplicate${result.duplicates !== 1 ? 's' : ''} skipped` : ''}.
+                    {result.reconciled > 0 ? `, ${result.reconciled} returning member${result.reconciled !== 1 ? 's' : ''} updated & reassigned` : ''}.
                   </p>
+                  {result.reconciled > 0 && (
+                    <p className="text-xs text-slate-400 mt-1">Note: undo below only removes newly created records — returning members' updated info isn't reverted.</p>
+                  )}
                 </div>
                 <button onClick={onClose} className="px-8 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700">Done</button>
                 <button

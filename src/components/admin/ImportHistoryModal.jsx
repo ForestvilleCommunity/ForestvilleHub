@@ -81,7 +81,9 @@ export default function ImportHistoryModal({ onClose, onUndone }) {
                     {timeAgo(entry.date)}
                     {entry.newTeams > 0 ? ` · ${entry.newTeams} new team${entry.newTeams !== 1 ? 's' : ''}` : ''}
                     {entry.newSquads > 0 ? ` · ${entry.newSquads} new squad${entry.newSquads !== 1 ? 's' : ''}` : ''}
-                    {entry.duplicates > 0 ? ` · ${entry.duplicates} skipped` : ''}
+                    {entry.reconciled > 0 ? ` · ${entry.reconciled} returning updated` : ''}
+                    {/* older history entries (pre-reconcile) recorded skipped duplicates instead */}
+                    {entry.reconciled === undefined && entry.duplicates > 0 ? ` · ${entry.duplicates} skipped` : ''}
                   </p>
                 </div>
                 <div className="shrink-0">
